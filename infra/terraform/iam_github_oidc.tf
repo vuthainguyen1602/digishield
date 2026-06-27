@@ -78,6 +78,27 @@ data "aws_iam_policy_document" "github_deploy" {
     ]
     resources = [local.ecr_repository_arn]
   }
+
+  # Frontend CD: sync the built SPA to S3 and invalidate the CloudFront cache.
+  statement {
+    sid = "FrontendS3Sync"
+    actions = [
+      "s3:ListBucket",
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+    ]
+    resources = [
+      aws_s3_bucket.frontend.arn,
+      "${aws_s3_bucket.frontend.arn}/*",
+    ]
+  }
+
+  statement {
+    sid       = "FrontendCloudFrontInvalidate"
+    actions   = ["cloudfront:CreateInvalidation", "cloudfront:GetInvalidation"]
+    resources = [aws_cloudfront_distribution.frontend.arn]
+  }
 }
 
 resource "aws_iam_role_policy" "github_deploy" {

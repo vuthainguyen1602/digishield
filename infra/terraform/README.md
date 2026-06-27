@@ -10,6 +10,9 @@ environment (`dev`, `prod`):
 - **Secrets Manager** `digishield/<env>/db` and `/redis` — `secrets.tf`
 - **IAM**: GitHub Actions OIDC deploy role (`iam_github_oidc.tf`) + IRSA role for
   External Secrets Operator (`iam_irsa.tf`)
+- **Frontend CDN**: private S3 bucket + CloudFront (OAC, SPA fallback) for the
+  React/Vite SPA — `frontend_cdn.tf`. Set custom domains via
+  `frontend_domain_aliases` + `frontend_acm_certificate_arn` (ACM in us-east-1).
 
 > Scaffold — review and run `terraform plan` before `apply`. Placeholders
 > (`<ACCOUNT_ID>`, sizes, region, CIDRs) live in `envs/*.tfvars` and `envs/*.hcl`.
@@ -49,6 +52,9 @@ After `apply`, `terraform output` gives everything the app side needs:
 | `redis_endpoint` | `values-<env>.yaml` → `redis.host` |
 | `external_secrets_irsa_role_arn` | annotate the ESO ServiceAccount: `eks.amazonaws.com/role-arn` |
 | `secrets_manager_prefix` | matches Helm `externalSecrets.remotePrefix` (`digishield/<env>`) |
+| `frontend_bucket` | GitHub Actions **variable** `FRONTEND_BUCKET` (FE CD runs `aws s3 sync frontend/dist s3://<this>`) |
+| `frontend_distribution_id` | GitHub Actions **variable** `FRONTEND_DISTRIBUTION_ID` (FE CD invalidates this after sync) |
+| `frontend_url` | public SPA URL (custom domain if set, else `*.cloudfront.net`) |
 
 Then set the repo variable **`DEPLOY_ENABLED=true`** so `cd.yml` runs the real
 `helm upgrade` instead of the placeholder.

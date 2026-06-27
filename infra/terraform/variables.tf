@@ -90,6 +90,25 @@ variable "redis_replicas_per_node_group" {
   default = 1
 }
 
+# --- Frontend CDN (S3 + CloudFront) ---
+variable "cloudfront_price_class" {
+  description = "CloudFront price class. PriceClass_100 = US/EU/Canada (cheapest); _200 adds Asia; _All is global."
+  type        = string
+  default     = "PriceClass_100"
+}
+
+variable "frontend_domain_aliases" {
+  description = "Custom domains for the SPA (e.g. [\"app.digishield.vn\"]). Empty = serve on the default *.cloudfront.net domain."
+  type        = list(string)
+  default     = []
+}
+
+variable "frontend_acm_certificate_arn" {
+  description = "ACM cert ARN for the custom domains. MUST be in us-east-1 (CloudFront requirement). Required when frontend_domain_aliases is set; empty otherwise."
+  type        = string
+  default     = ""
+}
+
 variable "github_repository" {
   description = "owner/repo allowed to assume the CI deploy role via OIDC."
   type        = string

@@ -36,3 +36,18 @@ output "secrets_manager_prefix" {
   description = "Matches Helm externalSecrets.remotePrefix."
   value       = local.secret_path
 }
+
+output "frontend_bucket" {
+  description = "Set as the GitHub Actions variable FRONTEND_BUCKET (CD runs: aws s3 sync frontend/dist s3://<this>)."
+  value       = aws_s3_bucket.frontend.id
+}
+
+output "frontend_distribution_id" {
+  description = "Set as the GitHub Actions variable FRONTEND_DISTRIBUTION_ID (CD invalidates this after sync)."
+  value       = aws_cloudfront_distribution.frontend.id
+}
+
+output "frontend_url" {
+  description = "Public URL of the SPA (custom alias if set, else the CloudFront domain)."
+  value       = length(var.frontend_domain_aliases) > 0 ? "https://${var.frontend_domain_aliases[0]}" : "https://${aws_cloudfront_distribution.frontend.domain_name}"
+}
