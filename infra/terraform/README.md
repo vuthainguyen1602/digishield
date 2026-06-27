@@ -10,6 +10,9 @@ environment (`dev`, `prod`):
 - **Secrets Manager** `digishield/<env>/db` and `/redis` — `secrets.tf`
 - **IAM**: GitHub Actions OIDC deploy role (`iam_github_oidc.tf`) + IRSA role for
   External Secrets Operator (`iam_irsa.tf`)
+- **Frontend CDN**: private S3 bucket + CloudFront (OAC, SPA fallback) for the
+  React/Vite SPA — `frontend_cdn.tf`. Set custom domains via
+  `frontend_domain_aliases` + `frontend_acm_certificate_arn` (ACM in us-east-1).
 
 > Scaffold — review and run `terraform plan` before `apply`. Placeholders
 > (`<ACCOUNT_ID>`, sizes, region, CIDRs) live in `envs/*.tfvars` and `envs/*.hcl`.
@@ -49,9 +52,35 @@ After `apply`, `terraform output` gives everything the app side needs:
 | `redis_endpoint` | `values-<env>.yaml` → `redis.host` |
 | `external_secrets_irsa_role_arn` | annotate the ESO ServiceAccount: `eks.amazonaws.com/role-arn` |
 | `secrets_manager_prefix` | matches Helm `externalSecrets.remotePrefix` (`digishield/<env>`) |
+| `frontend_bucket` | GitHub Actions **variable** `FRONTEND_BUCKET` (FE CD runs `aws s3 sync frontend/dist s3://<this>`) |
+| `frontend_distribution_id` | GitHub Actions **variable** `FRONTEND_DISTRIBUTION_ID` (FE CD invalidates this after sync) |
+| `frontend_url` | public SPA URL (custom domain if set, else `*.cloudfront.net`) |
 
 Then set the repo variable **`DEPLOY_ENABLED=true`** so `cd.yml` runs the real
 `helm upgrade` instead of the placeholder.
+
+**Production is double-gated.** The `deploy-prod` jobs (in `cd.yml` and
+`frontend-cd.yml`) are skipped entirely unless **`PROD_DEPLOY_ENABLED=true`**,
+on top of the `production` GitHub Environment's required-reviewer approval. Leave
+`PROD_DEPLOY_ENABLED` unset to run dev only (prod incurs no cost); set it to
+`true` **and** approve the gate when you actually want to ship production.
+
+## API routing (SPA -> backend, same-origin)
+
+The SPA calls the API same-origin via `VITE_API_BASE_URL=/api/v1`: CloudFront
+routes `/api/*` to the backend, so there is no CORS and one URL per env. Wiring,
+after the backend is deployed with `ingress.enabled=true`:
+
+1. The Helm Ingress provisions an internet-facing ALB. Read its DNS:
+   `kubectl -n digishield-<env> get ingress digishield-api`.
+2. Put that DNS (or a Route53 record fronting it) into the Terraform var
+   **`backend_api_origin_domain`** (`envs/<env>.tfvars`) and re-apply — CloudFront
+   gains the `/api/*` behavior pointing at it. Use a custom ALB domain + ACM cert
+   for `backend_api_origin_protocol_policy = "https-only"` (the default).
+
+Leave `backend_api_origin_domain` empty to skip the `/api/*` behavior; the SPA
+must then target a full cross-origin API URL (set GH Actions var
+`VITE_API_BASE_URL`) and the backend must send CORS headers.
 
 ## Create the ClusterSecretStore (after ESO is installed)
 
