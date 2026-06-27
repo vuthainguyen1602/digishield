@@ -1,0 +1,14 @@
+# Code owners — GitHub auto-requests review from these accounts on every PR.
+# Combined with "Require review from Code Owners" in branch protection, this
+# enforces that an admin / team lead must approve before a PR can be merged.
+#
+# Lines are last-match-wins; the catch-all below covers the whole repo.
+# Add more owners / @org/team slugs here as the team grows.
+
+# Whole repository (admin / team lead):
+*               @vuthainguyen1602
+
+# Examples of finer-grained ownership (optional — uncomment & adjust):
+# /digishield/   @vuthainguyen1602
+# /frontend/     @vuthainguyen1602
+# /.github/      @vuthainguyen1602
