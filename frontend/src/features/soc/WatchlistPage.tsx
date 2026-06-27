@@ -1,0 +1,332 @@
+import { useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
+import { Button, useToast } from '@/shared/ui';
+import { useBlacklist, type BlacklistEntry } from './watchlistApi';
+
+/**
+ * WatchlistPage — suspicious accounts / numbers / domains watchlist (`/soc/watchlist`).
+ *
+ * Quick-check bar + filter tabs + table (value / type / source / delete).
+ *
+ * Data comes from the live backend via `useBlacklist()` (`GET /blacklist`,
+ * `BlacklistEntryDto`). Loading/error/empty states handled below.
+ */
+
+type WlType = 'bank' | 'phone' | 'domain';
+
+interface WatchEntry {
+  id: string;
+  value: string;
+  valueMuted: string;
+  type: WlType;
+  typeLabel: string;
+  source: string;
+  /** highlight the value in red (e.g. fraud domain) */
+  danger?: boolean;
+}
+
+const TYPE_LABELS: Record<WlType, { typeLabel: string; valueMuted: string }> = {
+  bank: { typeLabel: 'Tài khoản', valueMuted: 'Tài khoản ngân hàng' },
+  phone: { typeLabel: 'SĐT', valueMuted: 'Số điện thoại' },
+  domain: { typeLabel: 'Domain', valueMuted: 'Domain / URL' },
+};
+
+/**
+ * Coerce the BE `type` (lower-case, e.g. "url"/"phone"/"domain"/"bank"/"account")
+ * onto one of the three watchlist buckets used by the UI.
+ */
+function normalizeType(raw: string | null | undefined): WlType {
+  const t = (raw ?? '').toLowerCase();
+  if (t.includes('phone') || t.includes('sms') || t.includes('sđt')) return 'phone';
+  if (t.includes('bank') || t.includes('account') || t.includes('iban')) return 'bank';
+  // url / domain / link / everything else → treated as domain
+  return 'domain';
+}
+
+/** Map a backend `BlacklistEntryDto` onto the table view model. */
+function toEntry(dto: BlacklistEntry): WatchEntry {
+  const type = normalizeType(dto.type);
+  const meta = TYPE_LABELS[type];
+  return {
+    id: dto.id,
+    value: dto.value ?? '—',
+    valueMuted: meta.valueMuted,
+    type,
+    typeLabel: meta.typeLabel,
+    source: dto.source ?? '—',
+    danger: type === 'domain',
+  };
+}
+
+const GRID = '1fr 110px 160px 70px';
+type Filter = 'all' | WlType;
+
+export default function WatchlistPage() {
+  const toast = useToast();
+  const [filter, setFilter] = useState<Filter>('all');
+  const { data, isLoading, isError, refetch } = useBlacklist();
+
+  const entries = useMemo<WatchEntry[]>(() => (data ?? []).map(toEntry), [data]);
+
+  const counts = useMemo(
+    () => ({
+      all: entries.length,
+      bank: entries.filter((e) => e.type === 'bank').length,
+      phone: entries.filter((e) => e.type === 'phone').length,
+      domain: entries.filter((e) => e.type === 'domain').length,
+    }),
+    [entries],
+  );
+
+  const visible = useMemo(
+    () => (filter === 'all' ? entries : entries.filter((e) => e.type === filter)),
+    [entries, filter],
+  );
+
+  const filters: { id: Filter; label: string }[] = [
+    { id: 'all', label: `Tất cả (${counts.all})` },
+    { id: 'bank', label: `Tài khoản ngân hàng (${counts.bank})` },
+    { id: 'phone', label: `Số điện thoại (${counts.phone})` },
+    { id: 'domain', label: `Domain (${counts.domain})` },
+  ];
+
+  return (
+    <div style={{ animation: 'fadeUp .3s ease' }}>
+      <header
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            marginBottom: 20,
+          }}
+        >
+          <div>
+            <h1 style={pageTitle}>Watchlist tài khoản nghi ngờ</h1>
+            <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
+              Theo dõi số tài khoản, SĐT và domain nghi ngờ từ nhiều nguồn
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Button type="button" variant="secondary" onClick={() => toast('Đang đồng bộ NCSC...')}>
+              Đồng bộ NCSC
+            </Button>
+            <Button type="button" variant="primary" onClick={() => toast('Thêm mục thủ công')}>
+              + Thêm thủ công
+            </Button>
+          </div>
+        </header>
+
+        {/* Quick check */}
+        <section
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: 20,
+            marginBottom: 14,
+          }}
+        >
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: '0 0 12px' }}>
+            Tra cứu nhanh · Quick Check
+          </h2>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              toast('Đang kiểm tra...');
+            }}
+            style={{ display: 'flex', gap: 10 }}
+          >
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: 'var(--bg)',
+                border: '1px solid var(--input-bdr, #C0CBDC)',
+                borderRadius: 8,
+                padding: '10px 14px',
+              }}
+            >
+              <Search size={14} color="var(--muted)" aria-hidden="true" />
+              <input
+                type="text"
+                aria-label="Tra cứu watchlist"
+                placeholder="Nhập số tài khoản, SĐT, hoặc domain..."
+                style={{
+                  flex: 1,
+                  border: 'none',
+                  background: 'transparent',
+                  outline: 'none',
+                  fontSize: 13.5,
+                  color: 'var(--text)',
+                  fontFamily: 'inherit',
+                }}
+              />
+            </div>
+            <Button type="submit" variant="primary">
+              Kiểm tra
+            </Button>
+          </form>
+        </section>
+
+        {/* Table */}
+        <div
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            overflow: 'hidden',
+          }}
+        >
+          {/* Filters */}
+          <div
+            role="tablist"
+            aria-label="Lọc watchlist"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--border)',
+              flexWrap: 'wrap',
+            }}
+          >
+            {filters.map((f) => {
+              const active = filter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setFilter(f.id)}
+                  style={{
+                    fontSize: 12.5,
+                    fontWeight: active ? 600 : 400,
+                    borderRadius: 7,
+                    padding: '5px 12px',
+                    cursor: 'pointer',
+                    color: active ? '#1A4FD0' : 'var(--muted)',
+                    background: active ? 'rgba(37,102,235,.08)' : 'var(--bg)',
+                    border: active ? '1px solid rgba(37,102,235,.2)' : '1px solid var(--border)',
+                  }}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Column headers */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: GRID,
+              padding: '10px 16px',
+              borderBottom: '1px solid var(--border)',
+              background: 'var(--bg)',
+            }}
+          >
+            {['Giá trị', 'Loại', 'Nguồn'].map((h) => (
+              <div key={h} style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--muted)' }}>
+                {h}
+              </div>
+            ))}
+            <div />
+          </div>
+
+          {/* Loading / error / empty states */}
+          {isLoading && <TableMessage>Đang tải watchlist…</TableMessage>}
+          {!isLoading && isError && (
+            <TableMessage>
+              <span style={{ color: 'var(--red)', fontWeight: 600 }}>
+                Không tải được watchlist.{' '}
+              </span>
+              <button
+                type="button"
+                onClick={() => refetch()}
+                style={{ all: 'unset', color: 'var(--blue)', cursor: 'pointer', fontWeight: 600 }}
+              >
+                Thử lại
+              </button>
+            </TableMessage>
+          )}
+          {!isLoading && !isError && visible.length === 0 && (
+            <TableMessage>Không có mục nào trong watchlist.</TableMessage>
+          )}
+
+          {/* Rows */}
+          {!isLoading &&
+            !isError &&
+            visible.map((e, idx) => {
+              const last = idx === visible.length - 1;
+              return (
+                <div
+                  key={e.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: GRID,
+                    padding: '13px 16px',
+                    borderBottom: last ? 'none' : '1px solid var(--border)',
+                    alignItems: 'center',
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: e.danger ? 'var(--red)' : 'var(--text)',
+                      }}
+                    >
+                      {e.value}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{e.valueMuted}</div>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{e.typeLabel}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{e.source}</div>
+                  <button
+                    type="button"
+                    onClick={() => toast(`Đã xóa ${e.value}`)}
+                    style={{
+                      all: 'unset',
+                      fontSize: 12,
+                      color: 'var(--red)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Xóa
+                  </button>
+                </div>
+              );
+            })}
+        </div>
+    </div>
+  );
+}
+
+const pageTitle: React.CSSProperties = {
+  fontFamily: "'Space Grotesk', system-ui",
+  fontSize: 22,
+  fontWeight: 700,
+  color: 'var(--text)',
+  letterSpacing: '-0.02em',
+  margin: 0,
+};
+
+function TableMessage({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        padding: '28px 16px',
+        textAlign: 'center',
+        fontSize: 13,
+        color: 'var(--muted)',
+      }}
+    >
+      {children}
+    </div>
+  );
+}

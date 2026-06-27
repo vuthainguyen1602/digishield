@@ -1,0 +1,131 @@
+/**
+ * DigiShield design tokens — high-fidelity handoff (light theme only).
+ * Source of truth: design_handoff_digishield/DigiShield.dc.html + README.md
+ *
+ * All tokens are exposed as CSS custom properties on :root so they can be
+ * consumed from any component (and overridden per-tenant if needed).
+ */
+
+:root {
+  /* ── Brand / palette ── */
+  --color-navy: #12284b; /* Sidebar headings, heavy headings */
+  --color-blue: #2566eb; /* Primary action, links, active states */
+  --color-blue-strong: #1a4fd0; /* Active nav text */
+  --color-teal: #18935c; /* Safe / success states */
+  --color-red: #dd3b40; /* Threats, danger actions */
+  --color-red-strong: #be2a2f; /* Threat label text, banner bg */
+  --color-amber: #e08a0b; /* Warnings, medium risk */
+
+  /* ── Surfaces & neutrals ── */
+  --color-bg: #f5f8fc; /* App background */
+  --color-bg-auth: #f0f4ff; /* Auth page backgrounds */
+  --color-surface: #ffffff; /* Cards, panels */
+  --color-border: #dce3ee; /* Card borders, separators */
+  --color-input-bg: #f5f8fc; /* Input / select backgrounds */
+  --color-input-border: #c0cbdc; /* Input borders */
+  --color-text: #141a26; /* Primary text */
+  --color-text-soft: #4c5a71; /* Labels, slightly softer than primary */
+  --color-muted: #69788f; /* Secondary text, labels */
+
+  /* ── Semantic aliases ── */
+  --color-primary: var(--color-blue);
+  --color-primary-strong: var(--color-blue-strong);
+  --color-success: var(--color-teal);
+  --color-warning: var(--color-amber);
+  --color-danger: var(--color-red);
+
+  /* Tints (used throughout the prototype) */
+  --tint-blue: rgba(37, 102, 235, 0.08);
+  --tint-blue-soft: rgba(37, 102, 235, 0.06);
+  --tint-teal: rgba(24, 147, 92, 0.1);
+  --tint-red: rgba(221, 59, 64, 0.08);
+  --tint-amber: rgba(224, 138, 11, 0.1);
+
+  /* Pill background / text pairs (status badges) */
+  --pill-safe-bg: #ddf3e6;
+  --pill-safe-fg: #0f7a4a;
+  --pill-warning-bg: #fcebcf;
+  --pill-warning-fg: #c0720a;
+  --pill-threat-bg: #fbe0df;
+  --pill-threat-fg: #be2a2f;
+  --pill-info-bg: rgba(37, 102, 235, 0.1);
+  --pill-info-fg: #1a4fd0;
+  --pill-neutral-bg: #eef2f8;
+  --pill-neutral-fg: #69788f;
+
+  /* ── Risk scale (0–100) ── */
+  --risk-low: #18935c; /* 0–39 */
+  --risk-medium: #e08a0b; /* 40–69 */
+  --risk-high: #dd3b40; /* 70–100 */
+
+  /* ── Typography ── */
+  --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --font-size-xs: 0.75rem; /* 12px */
+  --font-size-sm: 0.8125rem; /* 13px */
+  --font-size-md: 0.875rem; /* 14px */
+  --font-size-lg: 1rem; /* 16px */
+  --font-size-xl: 1.375rem; /* 22px */
+  --font-size-2xl: 1.625rem; /* 26px */
+  --line-height-base: 1.5;
+  --tracking-tight: -0.02em;
+
+  /* ── Spacing scale (px) ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 48px;
+
+  /* ── Radii ── */
+  --radius-sm: 6px;
+  --radius-md: 8px; /* inputs */
+  --radius-btn: 9px; /* buttons */
+  --radius-lg: 12px; /* cards */
+  --radius-xl: 16px; /* large panels */
+  --radius-pill: 999px;
+
+  /* ── Elevation ── */
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --shadow-auth: 0 4px 24px rgba(37, 102, 235, 0.08);
+  --shadow-dropdown: 0 16px 48px rgba(0, 0, 0, 0.18);
+
+  /* ── Layout ── */
+  --sidebar-width: 240px;
+  --topbar-height: 56px;
+  --drawer-width: 480px;
+
+  /* ── Z-index ── */
+  --z-sidebar: 100;
+  --z-topbar: 50;
+  --z-dropdown: 200;
+  --z-drawer: 500;
+  --z-banner: 9500;
+  --z-toast: 10000;
+}
+
+/**
+ * Compatibility aliases — short token names used by some feature pages
+ * (Learner/SOC) mapped to the canonical --color-* tokens. Keeping these as
+ * aliases avoids touching every page and guarantees colors resolve correctly.
+ */
+:root {
+  --text: var(--color-text);
+  --muted: var(--color-muted);
+  --border: var(--color-border);
+  --bg: var(--color-bg);
+  --surface: var(--color-surface);
+  --blue: var(--color-blue);
+  --red: var(--color-red);
+  --teal: var(--color-teal);
+  --amber: var(--color-amber);
+  --navy: var(--color-navy);
+  --input-bdr: var(--color-input-border);
+}

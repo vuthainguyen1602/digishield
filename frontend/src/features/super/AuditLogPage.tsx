@@ -1,0 +1,202 @@
+import { useMemo } from 'react';
+import { Button, DataTable, Select } from '@/shared/ui';
+import type { ColumnDef } from '@/shared/ui';
+import { useAuditLogs, type AuditLogEntry } from './api';
+
+/**
+ * AuditLogPage — Super Admin sensitive-action audit trail.
+ * Pixel-matched to the design handoff "AUDIT LOG" screen.
+ *
+ * Data comes from the live backend via `useAuditLogs()` (`GET /audit`).
+ * Loading/error/empty states handled below.
+ */
+
+// Action severity → badge color. critical=red, sensitive=amber, standard=gray.
+type Severity = 'critical' | 'sensitive' | 'standard';
+const severityStyle: Record<Severity, { bg: string; color: string }> = {
+  critical: { bg: 'var(--pill-threat-bg)', color: 'var(--pill-threat-fg)' },
+  sensitive: { bg: 'var(--pill-warning-bg)', color: 'var(--pill-warning-fg)' },
+  standard: { bg: 'rgba(105,120,143,.12)', color: 'var(--color-muted)' },
+};
+
+function normalizeSeverity(value: string | null): Severity {
+  return value === 'critical' || value === 'sensitive' || value === 'standard' ? value : 'standard';
+}
+
+type AuditRow = {
+  id: string;
+  time: string;
+  actor: string;
+  action: string;
+  severity: Severity;
+  object: string;
+  ip: string;
+};
+
+/** Map a backend `AuditLogView` onto the table view model. */
+function toRow(dto: AuditLogEntry): AuditRow {
+  let time = '';
+  if (dto.ts) {
+    const when = new Date(dto.ts);
+    time = Number.isNaN(when.getTime())
+      ? dto.ts
+      : `${when.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} ${when.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  return {
+    id: dto.id,
+    time,
+    actor: dto.actor ?? '—',
+    action: dto.action ?? '—',
+    severity: normalizeSeverity(dto.severity),
+    object: dto.target ?? '—',
+    ip: dto.ip ?? '—',
+  };
+}
+
+const monoMuted: React.CSSProperties = {
+  fontSize: 12,
+  fontFamily: "'JetBrains Mono', monospace",
+  color: 'var(--color-muted)',
+};
+
+export default function AuditLogPage() {
+  const { data, isLoading, isError, refetch } = useAuditLogs();
+
+  const rows = useMemo<AuditRow[]>(() => (data ?? []).map(toRow), [data]);
+
+  const columns: ColumnDef<AuditRow>[] = [
+    { id: 'time', header: 'Thời gian', cell: (r) => <span style={monoMuted}>{r.time}</span>, width: '140px' },
+    {
+      id: 'actor',
+      header: 'Người thực hiện',
+      cell: (r) => <span style={{ fontSize: 13, color: 'var(--color-text)' }}>{r.actor}</span>,
+    },
+    {
+      id: 'action',
+      header: 'Hành động',
+      cell: (r) => {
+        const s = severityStyle[r.severity];
+        return (
+          <span
+            style={{
+              background: s.bg,
+              color: s.color,
+              borderRadius: 99,
+              padding: '2px 8px',
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            {r.action}
+          </span>
+        );
+      },
+      width: '180px',
+    },
+    {
+      id: 'object',
+      header: 'Đối tượng',
+      cell: (r) => <span style={{ fontSize: 12.5, color: 'var(--color-muted)' }}>{r.object}</span>,
+      width: '140px',
+    },
+    { id: 'ip', header: 'IP', cell: (r) => <span style={monoMuted}>{r.ip}</span>, width: '100px' },
+  ];
+
+  return (
+    <>
+      <div style={{ animation: 'fadeUp .3s ease' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 20,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontFamily: "'Space Grotesk', system-ui",
+                fontSize: 22,
+                fontWeight: 700,
+                color: 'var(--color-text)',
+                letterSpacing: '-.02em',
+              }}
+            >
+              Nhật ký kiểm toán · Audit Log
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--color-muted)', marginTop: 4 }}>
+              Toàn bộ hành động nhạy cảm · Phục vụ điều tra &amp; tuân thủ
+            </div>
+          </div>
+          <Button variant="outline">Xuất CSV</Button>
+        </div>
+
+        {/* Filter bar */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+          <Select aria-label="Lọc theo người thực hiện" defaultValue="">
+            <option value="">Người thực hiện</option>
+            <option>admin@abc.gov.vn</option>
+            <option>analyst1@abc.vn</option>
+            <option>superadmin@ds.vn</option>
+          </Select>
+          <Select aria-label="Lọc theo hành động" defaultValue="">
+            <option value="">Hành động</option>
+            <option>broadcast_alert</option>
+            <option>triage:confirm</option>
+            <option>tenant.suspend</option>
+          </Select>
+          <Select aria-label="Lọc theo ngày" defaultValue="">
+            <option value="">27/06/2026</option>
+            <option>26/06/2026</option>
+            <option>25/06/2026</option>
+          </Select>
+        </div>
+
+        {/* Audit table */}
+        <div
+          style={{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 12,
+            overflow: 'hidden',
+          }}
+        >
+          {isLoading && <TableMessage>Đang tải nhật ký…</TableMessage>}
+          {!isLoading && isError && (
+            <TableMessage>
+              <span style={{ color: 'var(--color-red)', fontWeight: 600 }}>Không tải được nhật ký kiểm toán. </span>
+              <button type="button" onClick={() => refetch()} style={inlineRetry}>
+                Thử lại
+              </button>
+            </TableMessage>
+          )}
+          {!isLoading && !isError && rows.length === 0 && (
+            <TableMessage>Chưa có bản ghi nào.</TableMessage>
+          )}
+          {!isLoading && !isError && rows.length > 0 && (
+            <DataTable<AuditRow> columns={columns} data={rows} rowKey={(r) => r.id} />
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function TableMessage({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: 13.5, color: 'var(--color-muted)' }}>
+      {children}
+    </div>
+  );
+}
+
+const inlineRetry: React.CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--color-blue)',
+  fontWeight: 600,
+  fontSize: 13.5,
+  cursor: 'pointer',
+  padding: 0,
+};

@@ -1,0 +1,279 @@
+import { useState } from 'react';
+import { useToast } from '@/shared/ui';
+import { useNotifications, type Notification } from '@/features/notifications/api';
+
+/**
+ * AlertCenterPage — broadcast composer + history (`/soc/alerts`).
+ *
+ * Compose form (severity select + textarea + red Broadcast button) and a
+ * broadcast history list (severity badge + reach count).
+ *
+ * The history list is fed by the live backend via `useNotifications()`
+ * (`GET /notifications`); the compose form remains a local stub.
+ */
+
+type Severity = 'CRITICAL' | 'WARNING' | 'INFO';
+
+interface BroadcastRecord {
+  id: string;
+  severity: Severity;
+  at: string;
+  message: string;
+  reach: string;
+}
+
+const SEVERITY_OPTIONS: { value: Severity; label: string }[] = [
+  { value: 'CRITICAL', label: 'CRITICAL — Đe dọa đang hoạt động' },
+  { value: 'WARNING', label: 'WARNING — Cần chú ý' },
+  { value: 'INFO', label: 'INFO — Thông báo chung' },
+];
+
+const SEVERITY_BADGE: Record<Severity, { bg: string; color: string }> = {
+  CRITICAL: { bg: '#FBE0DF', color: '#BE2A2F' },
+  WARNING: { bg: '#FCEBCF', color: '#C0720A' },
+  INFO: { bg: 'rgba(37,102,235,.1)', color: '#1A4FD0' },
+};
+
+/** Map a notification `type` (alert|reminder|system) onto a severity badge. */
+function typeToSeverity(type: string | null | undefined): Severity {
+  if (type === 'alert') return 'CRITICAL';
+  if (type === 'reminder') return 'WARNING';
+  return 'INFO';
+}
+
+/** Format an ISO instant as `DD/MM HH:mm` (best effort). */
+function formatAt(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Map a backend `NotificationView` onto a history row. */
+function toRecord(n: Notification): BroadcastRecord {
+  const channel = n.channel ?? 'in_app';
+  const status = n.status ?? '';
+  return {
+    id: n.id,
+    severity: typeToSeverity(n.type),
+    at: formatAt(n.scheduledAt),
+    message: n.title ?? n.body ?? '(không có nội dung)',
+    reach: [channel, status].filter(Boolean).join(' · '),
+  };
+}
+
+export default function AlertCenterPage() {
+  const toast = useToast();
+  const [severity, setSeverity] = useState<Severity>('CRITICAL');
+  const [message, setMessage] = useState('');
+  const { data, isLoading, isError, refetch } = useNotifications();
+
+  const history = (data ?? []).map(toRecord);
+
+  function broadcast() {
+    // TODO: replace with generated useBroadcastAlert() mutation from @/api/generated.
+    if (!message.trim()) {
+      toast('Vui lòng nhập nội dung cảnh báo.');
+      return;
+    }
+    toast(`Đã phát cảnh báo ${severity} toàn tổ chức.`);
+    setMessage('');
+  }
+
+  return (
+    <div style={{ animation: 'fadeUp .3s ease' }}>
+      <header style={{ marginBottom: 20 }}>
+          <h1 style={pageTitle}>Trung tâm cảnh báo · Alert Center</h1>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
+            Soạn và phát cảnh báo toàn tổ chức qua WebSocket
+          </p>
+        </header>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {/* Compose form */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              broadcast();
+            }}
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: 24,
+            }}
+          >
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: '0 0 20px' }}>
+              Soạn cảnh báo mới
+            </h2>
+
+            <div style={{ marginBottom: 14 }}>
+              <label htmlFor="alert-severity" style={fieldLabel}>
+                Mức độ
+              </label>
+              <select
+                id="alert-severity"
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value as Severity)}
+                style={fieldControl}
+              >
+                {SEVERITY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label htmlFor="alert-message" style={fieldLabel}>
+                Nội dung cảnh báo
+              </label>
+              <textarea
+                id="alert-message"
+                rows={4}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Mô tả mối đe dọa, hướng dẫn xử lý..."
+                style={{ ...fieldControl, resize: 'none' }}
+              />
+            </div>
+
+            <button
+              type="submit"
+              style={{
+                width: '100%',
+                background: 'var(--red)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 9,
+                padding: 13,
+                textAlign: 'center',
+                fontWeight: 700,
+                fontSize: 15,
+                cursor: 'pointer',
+              }}
+            >
+              Phát cảnh báo toàn tổ chức
+            </button>
+          </form>
+
+          {/* History */}
+          <section
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: 24,
+            }}
+          >
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: '0 0 16px' }}>
+              Lịch sử phát · Broadcast History
+            </h2>
+            {isLoading && (
+              <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>Đang tải lịch sử…</div>
+            )}
+            {!isLoading && isError && (
+              <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>
+                <span style={{ color: 'var(--red)', fontWeight: 600 }}>Không tải được lịch sử. </span>
+                <button
+                  type="button"
+                  onClick={() => refetch()}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--blue)',
+                    fontWeight: 600,
+                    fontSize: 13.5,
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  Thử lại
+                </button>
+              </div>
+            )}
+            {!isLoading && !isError && history.length === 0 && (
+              <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>Chưa có thông báo nào.</div>
+            )}
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 10 }}>
+              {history.map((rec) => {
+                const badge = SEVERITY_BADGE[rec.severity];
+                const critical = rec.severity === 'CRITICAL';
+                return (
+                  <li
+                    key={rec.id}
+                    style={{
+                      background: critical ? 'rgba(221,59,64,.07)' : 'var(--bg)',
+                      border: critical
+                        ? '1px solid rgba(221,59,64,.15)'
+                        : '1px solid var(--border)',
+                      borderRadius: 10,
+                      padding: 14,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: 6,
+                      }}
+                    >
+                      <span
+                        style={{
+                          background: badge.bg,
+                          color: badge.color,
+                          borderRadius: 999,
+                          padding: '2px 8px',
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {rec.severity}
+                      </span>
+                      <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{rec.at}</span>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 3 }}>
+                      {rec.message}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{rec.reach}</div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        </div>
+    </div>
+  );
+}
+
+const pageTitle: React.CSSProperties = {
+  fontFamily: "'Space Grotesk', system-ui",
+  fontSize: 22,
+  fontWeight: 700,
+  color: 'var(--text)',
+  letterSpacing: '-0.02em',
+  margin: 0,
+};
+
+const fieldLabel: React.CSSProperties = {
+  display: 'block',
+  fontSize: 13,
+  fontWeight: 500,
+  color: 'var(--muted)',
+  marginBottom: 6,
+};
+
+const fieldControl: React.CSSProperties = {
+  width: '100%',
+  background: 'var(--bg)',
+  border: '1px solid var(--input-bdr, #C0CBDC)',
+  borderRadius: 8,
+  padding: '10px 14px',
+  color: 'var(--text)',
+  fontSize: 14,
+  fontFamily: 'inherit',
+  boxSizing: 'border-box',
+};
