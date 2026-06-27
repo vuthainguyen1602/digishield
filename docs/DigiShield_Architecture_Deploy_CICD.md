@@ -1,8 +1,10 @@
 # DigiShield — Directory Architecture, Packaging & CI/CD (Java/Spring)
 
 > Version 2.0 · 27/06/2026
-> Realizes **ADR-001** (Modular Monolith + separated Worker) and **ADR-002** (Java 21 + Spring Boot + Spring Modulith).
+> Realizes **ADR-001** (Modular Monolith + separated Worker) and **ADR-002** (Java + Spring Boot + Spring Modulith).
 > Stack: **Java 21 (LTS) · Spring Boot 3.5.x · Spring Modulith · Gradle**, PostgreSQL, Redis, RabbitMQ/Kafka, Docker, Kubernetes + Helm, GitHub Actions (equivalents are interchangeable).
+>
+> **Revision (realized stack):** the code has since taken the forward-compatible upgrade path in ADR-002 and now runs on **Java 25 · Spring Boot 4.1.0 · Spring Modulith 2.1.0 · Gradle 9.6.1** (wrapper committed). The directory architecture, packaging (1 image · api/worker/scheduler profiles) and CI/CD structure below are unchanged; only the toolchain/runtime versions moved. CI/CD now lives at the monorepo-root `.github/workflows/` (`backend-ci.yml` + `frontend-ci.yml`, path-filtered).
 
 ---
 

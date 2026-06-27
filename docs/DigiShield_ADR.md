@@ -113,6 +113,16 @@ This ADR originally targeted **Java 25**. During implementation we moved the bui
 
 The source remains forward-compatible: adopting Java 25 later only requires bumping the Gradle wrapper to ≥ 9.1 and (optionally) Spring Boot to 4.0, then raising the toolchain `languageVersion` back to 25.
 
+### Runtime Java version — Java 25 (revision, realized)
+
+The forward-compatible path above has since been taken. The build/runtime now targets **Java 25**, on the toolchain combination that supports it:
+
+- **Realized stack:** **Java 25 + Spring Boot 4.1.0 + Spring Modulith 2.1.0 + Gradle 9.6.1** (wrapper committed). This is exactly the upgrade the Java 21 revision flagged as required (Gradle ≥ 9.1, Boot 4.x, toolchain `languageVersion` back to 25), so the earlier `Unsupported class file major version 69` failure no longer applies.
+- **Why now.** The ecosystem reached stable Java 25 support (Boot 4.x / Gradle 9.x), satisfying the "Gradle/Spring toolchain reaches stable Java 25 support" review condition below.
+- **Scope.** Build toolchain (`languageVersion = 25` in the convention plugins), the runtime images (`eclipse-temurin:25-jdk`/`:25-jre`), and CI (`setup-java` 25). No Java 25-only language features are required; the upgrade is toolchain/runtime-level.
+
+> Historical note: the Java 21 LTS section above is retained as the prior decision. Java 25 is the current state of the code.
+
 ### Review Conditions
 
 Revisit if: the core team is not Java; an extremely low footprint / instant startup is needed at scale (consider native image or a lighter stack for some extracted services); a "single language for FE+BE" strategy becomes a priority; or the Gradle/Spring toolchain reaches stable Java 25 support and a newer LTS is desired.
