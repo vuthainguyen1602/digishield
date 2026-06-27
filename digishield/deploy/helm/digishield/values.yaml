@@ -17,8 +17,8 @@ api:
   # When enabled, an HPA manages replicas (the Deployment's replicas is omitted).
   autoscaling:
     enabled: false
-    minReplicas: 2
-    maxReplicas: 6
+    minReplicas: 1
+    maxReplicas: 3
     targetCPUUtilizationPercentage: 70
     targetMemoryUtilizationPercentage: 0 # 0 = disabled
 
