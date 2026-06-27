@@ -6,7 +6,9 @@ metadata:
     app.kubernetes.io/name: digishield
     app.kubernetes.io/component: api
 spec:
+  {{- if not .Values.api.autoscaling.enabled }}
   replicas: {{ .Values.api.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: digishield
@@ -27,28 +29,8 @@ spec:
             - name: http
               containerPort: {{ .Values.api.port }}
           env:
-            - name: DB_URL
-              value: {{ .Values.database.url | quote }}
-            - name: DB_USERNAME
-              value: {{ .Values.database.username | quote }}
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.database.existingSecret }}
-                  key: {{ .Values.database.passwordKey }}
-            - name: REDIS_HOST
-              value: {{ .Values.redis.host | quote }}
-            - name: REDIS_PORT
-              value: {{ .Values.redis.port | quote }}
-            - name: REDIS_SSL
-              value: {{ .Values.redis.tls | quote }}
-            {{- if .Values.redis.existingSecret }}
-            - name: REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.redis.existingSecret }}
-                  key: {{ .Values.redis.passwordKey }}
-            {{- end }}
+            {{- include "digishield.dbEnv" . | nindent 12 }}
+            {{- include "digishield.redisEnv" . | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
