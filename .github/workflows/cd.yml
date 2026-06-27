@@ -150,6 +150,17 @@ jobs:
             --set image.tag=sha-${GITHUB_SHA::7} \
             --atomic --wait --timeout 10m
 
+      # Health gate: if dev isn't healthy this job fails, so deploy-prod (which
+      # needs deploy-dev) never runs. helm --atomic already rolled dev back.
+      - name: Smoke test dev
+        if: vars.DEPLOY_ENABLED == 'true'
+        run: |
+          kubectl -n digishield-dev rollout status deploy/digishield-api --timeout=5m
+          kubectl -n digishield-dev run smoke-${GITHUB_RUN_ID} \
+            --rm -i --restart=Never --image=curlimages/curl:8.10.1 --quiet -- \
+            curl -fsS --retry 5 --retry-delay 5 --max-time 10 \
+            http://digishield-api.digishield-dev.svc.cluster.local/actuator/health/readiness
+
   deploy-prod:
     name: Deploy production
     needs: [build-push, deploy-dev] # sequential after dev; build-push for image ref
