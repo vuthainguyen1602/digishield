@@ -27,6 +27,7 @@ on:
 permissions:
   contents: read
   packages: write # push image to GHCR
+  id-token: write # OIDC -> assume AWS IAM role for EKS deploys
 
 concurrency:
   # Serialize deploys; never cancel an in-flight (possibly half-approved) run.
@@ -63,7 +64,12 @@ jobs:
             type=raw,value=0.1.0-SNAPSHOT
             type=sha,format=short
 
-      - name: Build & push image (built once, promoted to every env)
+      - name: Short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      # GHCR is always pushed (CI/verification, works without AWS).
+      - name: Build & push image to GHCR
         uses: docker/build-push-action@v6
         with:
           context: digishield
@@ -74,9 +80,37 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # ECR is the runtime registry EKS pulls from (only when AWS is wired up).
+      - name: Configure AWS credentials (OIDC)
+        if: vars.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        if: vars.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push image to ECR
+        if: vars.DEPLOY_ENABLED == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: digishield
+          file: digishield/deploy/docker/Dockerfile
+          push: true
+          tags: ${{ vars.ECR_REPOSITORY }}:sha-${{ steps.sha.outputs.short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Export immutable image ref
         id: ref
-        run: echo "image=ghcr.io/${{ github.repository }}/app:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ "${{ vars.DEPLOY_ENABLED }}" = "true" ]; then
+            echo "image=${{ vars.ECR_REPOSITORY }}:sha-${{ steps.sha.outputs.short }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "image=ghcr.io/${{ github.repository }}/app:sha-${{ steps.sha.outputs.short }}" >> "$GITHUB_OUTPUT"
+          fi
 
   deploy-dev:
     name: Deploy dev
@@ -86,13 +120,46 @@ jobs:
       name: dev
       # url: https://dev.<set-when-infra-exists>
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Until infrastructure exists, set the repository variable DEPLOY_ENABLED
+      # to "true" (Settings -> Secrets and variables -> Actions -> Variables) to
+      # switch from this placeholder to the real EKS deploy below.
       - name: Deploy to dev (placeholder)
-        env:
-          IMAGE: ${{ needs.build-push.outputs.image }}
+        if: vars.DEPLOY_ENABLED != 'true'
         run: |
-          echo "Deploying $IMAGE to environment: dev"
-          echo "TODO: real deploy (Helm/SSH/ArgoCD) once infra exists, e.g.:"
-          echo "  helm upgrade --install digishield deploy/helm/digishield -f deploy/helm/digishield/values-dev.yaml --set image.tag=sha-${GITHUB_SHA::7}"
+          echo "[placeholder] would deploy ${{ needs.build-push.outputs.image }} to dev"
+          echo "Set repo variable DEPLOY_ENABLED=true (+ AWS env secrets/vars) to enable the real deploy."
+
+      - name: Configure AWS credentials (OIDC)
+        if: vars.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Helm deploy to EKS (dev)
+        if: vars.DEPLOY_ENABLED == 'true'
+        run: |
+          aws eks update-kubeconfig --name "${{ vars.EKS_CLUSTER_NAME }}" --region "${{ vars.AWS_REGION }}"
+          helm upgrade --install digishield digishield/deploy/helm/digishield \
+            -f digishield/deploy/helm/digishield/values-dev.yaml \
+            --namespace digishield-dev --create-namespace \
+            --set image.repository=${{ vars.ECR_REPOSITORY }} \
+            --set image.tag=sha-${GITHUB_SHA::7} \
+            --atomic --wait --timeout 10m
+
+      # Health gate: if dev isn't healthy this job fails, so deploy-prod (which
+      # needs deploy-dev) never runs. helm --atomic already rolled dev back.
+      - name: Smoke test dev
+        if: vars.DEPLOY_ENABLED == 'true'
+        run: |
+          kubectl -n digishield-dev rollout status deploy/digishield-api --timeout=5m
+          kubectl -n digishield-dev run smoke-${GITHUB_RUN_ID} \
+            --rm -i --restart=Never --image=curlimages/curl:8.10.1 --quiet -- \
+            curl -fsS --retry 5 --retry-delay 5 --max-time 10 \
+            http://digishield-api.digishield-dev.svc.cluster.local/actuator/health/readiness
 
   deploy-prod:
     name: Deploy production
@@ -102,10 +169,29 @@ jobs:
       name: production # required-reviewer gate: run pauses here for approval
       # url: https://<set-when-infra-exists>
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Deploy to production (placeholder)
-        env:
-          IMAGE: ${{ needs.build-push.outputs.image }}
+        if: vars.DEPLOY_ENABLED != 'true'
         run: |
-          echo "Deploying $IMAGE to environment: production"
-          echo "TODO: real deploy (Helm/SSH/ArgoCD) once infra exists, e.g.:"
-          echo "  helm upgrade --install digishield deploy/helm/digishield -f deploy/helm/digishield/values-prod.yaml --set image.tag=sha-${GITHUB_SHA::7}"
+          echo "[placeholder] would deploy ${{ needs.build-push.outputs.image }} to production"
+          echo "Set repo variable DEPLOY_ENABLED=true (+ AWS env secrets/vars) to enable the real deploy."
+
+      - name: Configure AWS credentials (OIDC)
+        if: vars.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Helm deploy to EKS (production)
+        if: vars.DEPLOY_ENABLED == 'true'
+        run: |
+          aws eks update-kubeconfig --name "${{ vars.EKS_CLUSTER_NAME }}" --region "${{ vars.AWS_REGION }}"
+          helm upgrade --install digishield digishield/deploy/helm/digishield \
+            -f digishield/deploy/helm/digishield/values-prod.yaml \
+            --namespace digishield-prod --create-namespace \
+            --set image.repository=${{ vars.ECR_REPOSITORY }} \
+            --set image.tag=sha-${GITHUB_SHA::7} \
+            --atomic --wait --timeout 10m

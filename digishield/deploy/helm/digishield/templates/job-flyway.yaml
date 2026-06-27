@@ -27,13 +27,5 @@ spec:
           args:
             - "--spring.profiles.active={{ .Values.flyway.profile }}"
           env:
-            - name: DB_URL
-              value: {{ .Values.database.url | quote }}
-            - name: DB_USERNAME
-              value: {{ .Values.database.username | quote }}
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.database.existingSecret }}
-                  key: {{ .Values.database.passwordKey }}
+            {{- include "digishield.dbEnv" . | nindent 12 }}
 {{- end }}
