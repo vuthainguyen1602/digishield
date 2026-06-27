@@ -38,6 +38,8 @@ nbdist/
 *.ctxt
 .mtj.tmp/
 *.jar
+# Keep the committed Gradle wrapper jar (must come AFTER *.jar to win).
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.nar
 *.ear
