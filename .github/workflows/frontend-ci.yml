@@ -1,8 +1,11 @@
 # Frontend CI (React + Vite + TypeScript under frontend/)
 #
-# Monorepo: lives at repo-root .github/workflows with a path filter so it only
-# runs on FE changes (or when the OpenAPI spec the client is generated from
-# changes). All steps run with working-directory: frontend.
+# Monorepo: lives at repo-root .github/workflows.
+#
+# Required-status-check friendly: on PRs the workflow ALWAYS runs (no path
+# filter on pull_request) so the final "Frontend CI" gate always reports a
+# status — even on PRs that don't touch the frontend (the heavy job is then
+# skipped). Mark "Frontend CI" as the required check.
 #
 # Package manager: npm (committed lockfile is package-lock.json) -> use npm ci.
 
@@ -16,22 +19,38 @@ on:
       - "docs/DigiShield_openapi.yaml"
       - ".github/workflows/frontend-ci.yml"
   pull_request:
-    paths:
-      - "frontend/**"
-      - "docs/DigiShield_openapi.yaml"
-      - ".github/workflows/frontend-ci.yml"
+    branches: [main, develop]
 
 permissions:
   contents: read
 
-defaults:
-  run:
-    working-directory: frontend
-
 jobs:
+  changes:
+    name: Detect frontend changes
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.f.outputs.frontend }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Filter paths
+        id: f
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - 'docs/DigiShield_openapi.yaml'
+              - '.github/workflows/frontend-ci.yml'
+
   build:
     name: Lint, Typecheck, Test & Build
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,3 +90,23 @@ jobs:
           name: frontend-dist
           path: frontend/dist/**
           if-no-files-found: warn
+
+  # Always-running gate so branch protection has a stable required context.
+  frontend-ci:
+    name: Frontend CI
+    needs: [changes, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify frontend jobs
+        run: |
+          echo "changes=${{ needs.changes.result }} build=${{ needs.build.result }}"
+          for r in "${{ needs.changes.result }}" "${{ needs.build.result }}"; do
+            case "$r" in
+              failure|cancelled)
+                echo "::error::A frontend CI job did not pass ($r)."
+                exit 1
+                ;;
+            esac
+          done
+          echo "Frontend CI gate passed (built successfully, or skipped as not applicable)."
