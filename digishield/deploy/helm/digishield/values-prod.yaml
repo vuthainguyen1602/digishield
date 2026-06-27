@@ -21,6 +21,11 @@ api:
     limits:
       cpu: "2"
       memory: 2Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 65
 
 worker:
   replicaCount: 2

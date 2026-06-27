@@ -14,14 +14,35 @@ api:
     limits:
       cpu: "1"
       memory: 1Gi
+  # When enabled, an HPA manages replicas (the Deployment's replicas is omitted).
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 0 # 0 = disabled
 
 worker:
   replicaCount: 1
   profile: worker
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
 
 scheduler:
   replicaCount: 1
   profile: scheduler
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
 database:
   # On AWS this is the RDS/Aurora PostgreSQL endpoint (set in values-<env>.yaml).
