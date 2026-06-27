@@ -1,0 +1,1537 @@
+openapi: 3.0.3
+info:
+  title: DigiShield (Digital Shield) API
+  version: 1.0.0
+  description: >
+    Platform API for prevention, training & alerting against online scams in cyberspace.
+    Multi-tenant, RBAC, scoped by org_id in the JWT. Errors follow RFC 7807.
+  contact:
+    name: DigiShield Engineering
+servers:
+  - url: https://api.digishield.vn/api/v1
+    description: Production
+  - url: https://staging-api.digishield.vn/api/v1
+    description: Staging
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+  - name: Users
+  - name: Groups
+  - name: Learning
+  - name: Simulation
+  - name: Reports
+  - name: Alerts
+  - name: Blacklist
+  - name: Analytics
+  - name: AI
+  - name: Gamification
+  - name: Assessment
+  - name: Certificate
+  - name: Provisioning
+  - name: Notification
+  - name: ThreatFlip
+  - name: Coaching
+  - name: Compliance
+  - name: Interception
+  - name: Watchlist
+  - name: Tenancy
+  - name: Billing
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Internal login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Problem' }
+
+  /auth/sso/callback:
+    post:
+      tags: [Auth]
+      summary: SSO callback (SAML/OAuth)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [org, assertion]
+              properties:
+                org: { type: string }
+                assertion: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset (send email link)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '202': { description: Email sent if the account exists }
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password using token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, new_password]
+              properties:
+                token: { type: string, description: Token from email }
+                new_password: { type: string, format: password }
+      responses:
+        '200': { description: Password changed successfully }
+        '400': { $ref: '#/components/responses/Problem' }
+
+  /auth/mfa/setup:
+    post:
+      tags: [Auth]
+      summary: Initialize MFA (generate secret + QR for authenticator)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret: { type: string }
+                  otpauth_url: { type: string }
+                  qr_svg: { type: string }
+
+  /auth/mfa/verify:
+    post:
+      tags: [Auth]
+      summary: Confirm MFA activation with the first code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        '200':
+          description: MFA enabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recovery_codes: { type: array, items: { type: string } }
+
+  /auth/mfa/challenge:
+    post:
+      tags: [Auth]
+      summary: Verify MFA code during login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mfa_token, code]
+              properties:
+                mfa_token: { type: string, description: Temporary token after the password step }
+                code: { type: string }
+                trust_device: { type: boolean, default: false }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Problem' }
+
+  /users:
+    get:
+      tags: [Users]
+      summary: List users
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+        - in: query
+          name: department_id
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/User' }
+    post:
+      tags: [Users]
+      summary: Create user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+
+  /users/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Users]
+      summary: User details
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+    patch:
+      tags: [Users]
+      summary: Update user/role
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserInput' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+
+  /groups:
+    get:
+      tags: [Groups]
+      summary: List groups (including smart groups)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Group' }
+    post:
+      tags: [Groups]
+      summary: Create group (rule_json for smart group)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Group' }
+      responses:
+        '201': { description: Created }
+
+  /groups/{id}/evaluate:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Groups]
+      summary: Re-evaluate smart group members
+      responses:
+        '200':
+          description: Member count after evaluation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  member_count: { type: integer }
+
+  /courses:
+    get:
+      tags: [Learning]
+      summary: Course library
+      parameters:
+        - in: query
+          name: level
+          schema: { type: string, enum: [basic, beginner, intermediate, advanced] }
+        - in: query
+          name: lang
+          schema: { type: string, example: vi }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Course' }
+
+  /enrollments:
+    post:
+      tags: [Learning]
+      summary: Enroll user in a course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, course_id]
+              properties:
+                user_id: { type: string, format: uuid }
+                course_id: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Enrollment' }
+
+  /sim/campaigns:
+    get:
+      tags: [Simulation]
+      summary: List simulation campaigns
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SimCampaign' }
+    post:
+      tags: [Simulation]
+      summary: Create simulation campaign
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SimCampaignInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SimCampaign' }
+
+  /sim/events:
+    post:
+      tags: [Simulation]
+      summary: Record simulation event (tracking)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SimEvent' }
+      responses:
+        '202': { description: Accepted }
+
+  /reports/phishing:
+    post:
+      tags: [Reports]
+      summary: User submits a suspicious email/SMS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payload]
+              properties:
+                payload: { type: string, description: Email content/headers/link }
+                channel: { type: string, enum: [email, sms] }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Report' }
+    get:
+      tags: [Reports]
+      summary: Report queue (Analyst)
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [new, in_review, confirmed, dismissed, closed] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Report' }
+
+  /reports/phishing/{id}/triage:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Reports]
+      summary: Analyst triages / processes a report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [confirm_threat, dismiss, quarantine] }
+                add_to_blacklist: { type: boolean, default: false }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Report' }
+
+  /alerts/broadcast:
+    post:
+      tags: [Alerts]
+      summary: Broadcast alert to the entire organization (WebSocket push)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [severity, message]
+              properties:
+                severity: { type: string, enum: [info, warning, critical] }
+                message: { type: string }
+      responses:
+        '202': { description: Accepted }
+
+  /blacklist:
+    get:
+      tags: [Blacklist]
+      summary: List blacklist
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BlacklistEntry' }
+    post:
+      tags: [Blacklist]
+      summary: Add/sync blacklist (NCSC)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BlacklistEntry' }
+      responses:
+        '201': { description: Created }
+
+  /analytics/risk:
+    get:
+      tags: [Analytics]
+      summary: Risk score by scope
+      parameters:
+        - in: query
+          name: scope
+          schema: { type: string, enum: [user, dept, org] }
+        - in: query
+          name: scope_id
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiskScore' }
+
+  /analytics/benchmark:
+    get:
+      tags: [Analytics]
+      summary: Benchmark phish-prone rate against the industry
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_phish_prone_pct: { type: number }
+                  industry_avg_pct: { type: number }
+
+  /ai/templates/generate:
+    post:
+      tags: [AI]
+      summary: AI generates a simulated phishing template (pending approval)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, industry]
+              properties:
+                channel: { type: string, enum: [email, sms] }
+                industry: { type: string, example: banking }
+                season: { type: string, example: summer }
+      responses:
+        '200':
+          description: Template draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SimTemplate' }
+
+  /ai/classify:
+    post:
+      tags: [AI]
+      summary: AI classifies a reported email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payload]
+              properties:
+                payload: { type: string }
+      responses:
+        '200':
+          description: Classification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  label: { type: string, enum: [clean, spam, threat] }
+                  confidence: { type: number, format: float }
+                  reason: { type: string }
+
+  /tenants:
+    get:
+      tags: [Tenancy]
+      summary: List tenants (Super Admin)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Tenant' }
+    post:
+      tags: [Tenancy]
+      summary: Create a new tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Tenant' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tenant' }
+
+  /tenants/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Tenancy]
+      summary: Tenant details
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tenant' }
+    patch:
+      tags: [Tenancy]
+      summary: Update tenant (tier, status, data region)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Tenant' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tenant' }
+
+  /tenants/{id}/settings:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Tenancy]
+      summary: Tenant configuration (branding, policy, language)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TenantSettings' }
+    patch:
+      tags: [Tenancy]
+      summary: Update tenant configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TenantSettings' }
+      responses:
+        '200': { description: OK }
+
+  /tenants/{id}/feature-flags:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Tenancy]
+      summary: List tenant feature flags
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/FeatureFlag' }
+    patch:
+      tags: [Tenancy]
+      summary: Enable/disable feature flag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FeatureFlag' }
+      responses:
+        '200': { description: OK }
+
+  /tenants/{id}/usage:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Billing]
+      summary: Tenant usage metering data
+      parameters:
+        - in: query
+          name: period
+          schema: { type: string, example: 2026-06 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/UsageMetering' }
+
+  /tenants/{id}/subscription:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Billing]
+      summary: Tenant's current subscription
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+    put:
+      tags: [Billing]
+      summary: Change subscription plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_id]
+              properties:
+                plan_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+
+  /plans:
+    get:
+      tags: [Billing]
+      summary: List service plans
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Plan' }
+
+  /gamification/leaderboard:
+    get:
+      tags: [Gamification]
+      summary: Leaderboard
+      parameters:
+        - in: query
+          name: scope
+          schema: { type: string, enum: [org, department], default: org }
+        - in: query
+          name: period
+          schema: { type: string, example: month }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    rank: { type: integer }
+                    name: { type: string }
+                    points: { type: integer }
+
+  /users/{id}/badges:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Gamification]
+      summary: User's badges
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Badge' }
+
+  /users/{id}/points:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Gamification]
+      summary: Accumulated points (points ledger)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  entries:
+                    type: array
+                    items: { $ref: '#/components/schemas/PointsEntry' }
+
+  /assessments:
+    get:
+      tags: [Assessment]
+      summary: List assessments
+      parameters:
+        - in: query
+          name: type
+          schema: { type: string, enum: [knowledge, culture, placement] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Assessment' }
+    post:
+      tags: [Assessment]
+      summary: Create assessment (knowledge/culture/placement)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Assessment' }
+      responses:
+        '201': { description: Created }
+
+  /assessments/{id}/responses:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Assessment]
+      summary: Submit assessment response (supports anonymous)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answers]
+              properties:
+                answers: { type: object }
+                anonymous: { type: boolean, default: false }
+      responses:
+        '202': { description: Accepted }
+
+  /assessments/{id}/results:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Assessment]
+      summary: Aggregated results (anonymized)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  response_count: { type: integer }
+                  summary: { type: object }
+
+  /assessments/placement:
+    post:
+      tags: [Assessment]
+      summary: Adaptive placement assessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, answers]
+              properties:
+                user_id: { type: string, format: uuid }
+                answers: { type: object }
+      responses:
+        '200':
+          description: Recommended level
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  level: { type: string, enum: [basic, beginner, intermediate, advanced] }
+
+  /users/{id}/certificates:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Certificate]
+      summary: List certificates
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Certificate' }
+
+  /certificates/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Certificate]
+      summary: Download certificate (PDF)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+
+  /users/import:
+    post:
+      tags: [Provisioning]
+      summary: Bulk import users (CSV/JSON)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                users:
+                  type: array
+                  items: { $ref: '#/components/schemas/UserInput' }
+          text/csv:
+            schema: { type: string }
+      responses:
+        '202':
+          description: Accepted (asynchronous processing)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id: { type: string }
+                  accepted: { type: integer }
+
+  /scim/v2/Users:
+    get:
+      tags: [Provisioning]
+      summary: SCIM 2.0 - list users (IdP sync)
+      responses:
+        '200': { description: OK }
+    post:
+      tags: [Provisioning]
+      summary: SCIM 2.0 - create user
+      responses:
+        '201': { description: Created }
+
+  /notifications:
+    get:
+      tags: [Notification]
+      summary: List user's notifications
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Notification' }
+    post:
+      tags: [Notification]
+      summary: Create notification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Notification' }
+      responses:
+        '201': { description: Created }
+
+  /notifications/reminders:
+    post:
+      tags: [Notification]
+      summary: Schedule mandatory training reminders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_filter, due_rule]
+              properties:
+                target_filter: { type: object }
+                due_rule: { type: string, example: "before_due:3d" }
+                channel: { type: string, enum: [in_app, email, sms] }
+      responses:
+        '202': { description: Accepted }
+
+  /threat-intel:
+    get:
+      tags: [ThreatFlip]
+      summary: List threat intel sources
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ThreatIntel' }
+    post:
+      tags: [ThreatFlip]
+      summary: Ingest threat intel (feed/NCSC)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ThreatIntel' }
+      responses:
+        '201': { description: Created }
+
+  /threat-intel/{id}/convert:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [ThreatFlip]
+      summary: Convert a real threat into a template/lesson (de-identified)
+      responses:
+        '201':
+          description: Template + coaching page draft
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  template_id: { type: string, format: uuid }
+                  coaching_page_id: { type: string, format: uuid }
+
+  /reports/phishing/{id}/convert-to-training:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [ThreatFlip]
+      summary: Flip a reported email into training content
+      responses:
+        '201': { description: Created }
+
+  /ai/moderate:
+    post:
+      tags: [AI]
+      summary: Safety moderation of AI-generated content
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+      responses:
+        '200':
+          description: Moderation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verdict: { type: string, enum: [pass, flag, block] }
+                  reasons: { type: array, items: { type: string } }
+
+  /ai/orchestration/run:
+    post:
+      tags: [AI]
+      summary: Run AIDA - recompute risk & auto-enroll
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope: { type: string, enum: [org, department, user] }
+                scope_id: { type: string, format: uuid }
+      responses:
+        '202': { description: Accepted }
+
+  /coaching-pages:
+    get:
+      tags: [Coaching]
+      summary: List just-in-time coaching pages
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CoachingPage' }
+    post:
+      tags: [Coaching]
+      summary: Create/update coaching content
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CoachingPage' }
+      responses:
+        '201': { description: Created }
+
+  /compliance/policies:
+    get:
+      tags: [Compliance]
+      summary: Policies & compliance mapping
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CompliancePolicy' }
+    post:
+      tags: [Compliance]
+      summary: Create compliance policy (mandatory training)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompliancePolicy' }
+      responses:
+        '201': { description: Created }
+
+  /compliance/status:
+    get:
+      tags: [Compliance]
+      summary: Compliance status by unit/individual
+      parameters:
+        - in: query
+          name: scope
+          schema: { type: string, enum: [org, department, user] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  compliant_pct: { type: number }
+                  overdue_count: { type: integer }
+
+  /interventions/evaluate:
+    post:
+      tags: [Interception]
+      summary: Real-time risk assessment at the transaction point (active-call detection)
+      description: >
+        Returns an alert decision (allow/warn/pause/block) based on a combination of signals.
+        DigiShield does NOT execute the transaction — it only returns a decision for the calling app to handle.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, amount, dest_account]
+              properties:
+                user_id: { type: string, format: uuid }
+                amount: { type: number }
+                dest_account: { type: string }
+                on_call: { type: boolean, description: User is currently on a call }
+                new_payee: { type: boolean, description: First-time payee }
+      responses:
+        '200':
+          description: Intervention decision
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InterventionDecision' }
+
+  /interventions:
+    get:
+      tags: [Interception]
+      summary: Intervention log (SOC/reporting)
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/InterventionEvent' }
+
+  /account-watchlist:
+    get:
+      tags: [Watchlist]
+      summary: List suspicious recipient accounts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AccountWatchEntry' }
+    post:
+      tags: [Watchlist]
+      summary: Add/sync suspicious accounts (SIMO/NAPAS/A05)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountWatchEntry' }
+      responses:
+        '201': { description: Created }
+
+  /account-watchlist/check:
+    get:
+      tags: [Watchlist]
+      summary: Quick lookup of account/phone number at the money-transfer point
+      parameters:
+        - in: query
+          name: value
+          required: true
+          schema: { type: string }
+        - in: query
+          name: type
+          schema: { type: string, enum: [bank_account, phone, wallet] }
+      responses:
+        '200':
+          description: Lookup result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matched: { type: boolean }
+                  risk_level: { type: string, enum: [none, watch, high, confirmed] }
+                  source: { type: string }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      in: query
+      name: page
+      schema: { type: integer, default: 1, minimum: 1 }
+    Size:
+      in: query
+      name: size
+      schema: { type: integer, default: 20, maximum: 100 }
+
+  responses:
+    Problem:
+      description: Error (RFC 7807)
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            properties:
+              type: { type: string }
+              title: { type: string }
+              status: { type: integer }
+              detail: { type: string }
+
+  schemas:
+    TokenPair:
+      type: object
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        expires_in: { type: integer }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        department_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { type: string, enum: [super_admin, org_admin, manager, content_editor, analyst, learner] }
+        status: { type: string, enum: [active, invited, disabled] }
+        risk_score: { type: integer }
+        locale: { type: string, example: vi }
+
+    UserInput:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string, format: email }
+        role: { type: string }
+        department_id: { type: string, format: uuid }
+        locale: { type: string }
+
+    Group:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        rule_json:
+          type: object
+          description: Dynamic conditions for the smart group
+          example: { risk_score_gte: 70, department: "ke-toan" }
+
+    Course:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        domain: { type: string }
+        level: { type: string, enum: [basic, beginner, intermediate, advanced] }
+        lang: { type: string }
+        duration_min: { type: integer }
+
+    Enrollment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        course_id: { type: string, format: uuid }
+        status: { type: string, enum: [assigned, in_progress, completed, overdue] }
+        score: { type: integer }
+        completed_at: { type: string, format: date-time }
+
+    SimTemplate:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        channel: { type: string, enum: [email, sms, qr, usb, voice, zalo, teams, slack] }
+        subject: { type: string }
+        body_ref: { type: string }
+        difficulty: { type: string, enum: [easy, medium, hard] }
+        status: { type: string, enum: [draft, approved] }
+
+    SimCampaignInput:
+      type: object
+      required: [template_id, target_filter]
+      properties:
+        template_id: { type: string, format: uuid }
+        target_filter:
+          type: object
+          example: { group_id: "g_123" }
+        scheduled_at: { type: string, format: date-time }
+
+    SimCampaign:
+      allOf:
+        - $ref: '#/components/schemas/SimCampaignInput'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            org_id: { type: string, format: uuid }
+            status: { type: string, enum: [draft, scheduled, running, collecting, completed, reported, cancelled] }
+
+    SimEvent:
+      type: object
+      required: [campaign_id, user_id, action]
+      properties:
+        campaign_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        action: { type: string, enum: [delivered, open, click, submit, report] }
+        channel: { type: string, enum: [email, sms, qr, usb, voice, zalo, teams, slack] }
+        ts: { type: string, format: date-time }
+
+    Report:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        payload: { type: string }
+        ai_label: { type: string, enum: [clean, spam, threat] }
+        ai_confidence: { type: number, format: float }
+        status: { type: string, enum: [new, ai_classified, in_review, confirmed, dismissed, quarantined, closed] }
+
+    BlacklistEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [url, phone, account] }
+        value: { type: string }
+        source: { type: string, example: NCSC }
+        added_at: { type: string, format: date-time }
+
+    RiskScore:
+      type: object
+      properties:
+        scope: { type: string, enum: [user, dept, org] }
+        scope_id: { type: string, format: uuid }
+        value: { type: integer, minimum: 0, maximum: 100 }
+        computed_at: { type: string, format: date-time }
+
+    Badge:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        criteria_json: { type: object }
+        icon_ref: { type: string }
+        awarded_at: { type: string, format: date-time }
+
+    PointsEntry:
+      type: object
+      properties:
+        points: { type: integer }
+        reason: { type: string }
+        ts: { type: string, format: date-time }
+
+    Assessment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [knowledge, culture, placement] }
+        anonymous: { type: boolean }
+        questions_json: { type: object }
+        period: { type: string }
+
+    Certificate:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        course_id: { type: string, format: uuid }
+        serial: { type: string }
+        pdf_ref: { type: string }
+        issued_at: { type: string, format: date-time }
+
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        type: { type: string, enum: [reminder, alert, system] }
+        channel: { type: string, enum: [in_app, email, sms] }
+        payload: { type: object }
+        status: { type: string, enum: [scheduled, sent, read] }
+        scheduled_at: { type: string, format: date-time }
+
+    ThreatIntel:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        source: { type: string, example: NCSC }
+        raw_payload: { type: string }
+        converted_template_id: { type: string, format: uuid }
+        collected_at: { type: string, format: date-time }
+
+    CoachingPage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        template_id: { type: string, format: uuid }
+        content_ref: { type: string }
+        signals_json: { type: object, description: Recognizable warning signs to display }
+
+    CompliancePolicy:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        framework: { type: string, example: ISO27001 }
+        mapping_json: { type: object }
+        mandatory: { type: boolean }
+        due_rule: { type: string, example: "annual" }
+
+    InterventionDecision:
+      type: object
+      properties:
+        decision: { type: string, enum: [allow, warn, pause, block] }
+        signals: { type: array, items: { type: string }, example: [on_call, new_payee, watchlist_hit] }
+        message: { type: string, description: Warning/educational content to display }
+
+    InterventionEvent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        signals: { type: array, items: { type: string } }
+        decision: { type: string, enum: [allow, warn, pause, block] }
+        ts: { type: string, format: date-time }
+
+    AccountWatchEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [bank_account, phone, wallet] }
+        value: { type: string }
+        risk_level: { type: string, enum: [watch, high, confirmed] }
+        source: { type: string, example: SIMO }
+        added_at: { type: string, format: date-time }
+
+    Tenant:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        tier: { type: string, enum: [pool, bridge, silo] }
+        data_region: { type: string, example: vn }
+        status: { type: string, enum: [provisioning, active, suspended, offboarding] }
+        created_at: { type: string, format: date-time }
+
+    TenantSettings:
+      type: object
+      properties:
+        tenant_id: { type: string, format: uuid }
+        branding: { type: object, description: logo, colors, subdomain }
+        policy: { type: object, description: risk thresholds, mandatory training }
+        default_locale: { type: string, example: vi }
+
+    FeatureFlag:
+      type: object
+      properties:
+        key: { type: string, example: deepfake_sim }
+        enabled: { type: boolean }
+
+    Plan:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, enum: [edu, business, gov] }
+        limits: { type: object, description: seats, emails, ai_calls }
+        features: { type: object }
+
+    Subscription:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        plan_id: { type: string, format: uuid }
+        status: { type: string, enum: [trial, active, past_due, canceled] }
+        renews_at: { type: string, format: date }
+
+    UsageMetering:
+      type: object
+      properties:
+        tenant_id: { type: string, format: uuid }
+        metric: { type: string, enum: [email_sent, sms_sent, ai_call, storage] }
+        value: { type: integer }
+        period: { type: string, example: 2026-06 }
