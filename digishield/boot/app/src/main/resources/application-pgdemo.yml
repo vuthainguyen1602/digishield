@@ -1,0 +1,44 @@
+# =============================================================================
+# pgdemo profile — "prod-LIKE" demo overrides.
+#
+# Activated TOGETHER with dev:  --spring.profiles.active=dev,pgdemo
+#
+# Why two profiles? `dev` gives us the runnable demo experience the React
+# frontend needs:
+#   * permissive security (DevSecurityConfig @Profile("dev")) — the real JWT
+#     issuer is not implemented yet,
+#   * CORS for the Vite dev server (http://localhost:5173),
+#   * DevTenantFilter pinning the demo tenant 11111111-1111-1111-1111-111111111111,
+#   * the 7 dev seeders that populate demo data.
+#
+# `pgdemo` then FLIPS the datastore from dev's in-memory H2 onto a REAL
+# PostgreSQL + Flyway stack, exercising the actual migration path. Because
+# pgdemo is listed AFTER dev, these keys win over the dev values.
+#
+# This is prod-LIKE, not full prod: prod (application.yml, @Profile("!dev"))
+# additionally requires real OAuth2/JWT and enforces RLS as a non-superuser.
+# Here the app connects as the `digishield` superuser, so FORCE RLS is bypassed
+# (single-tenant demo) and the dev permissive security stays in effect.
+# =============================================================================
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/digishield}
+    username: ${DB_USERNAME:digishield}
+    password: ${DB_PASSWORD:digishield}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # The V001 + V002 migrations now match every JPA entity (see
+      # db/SCHEMA_AUDIT.md), so we validate the Flyway-built schema against the
+      # entities. This is the same setting prod uses. If you ever reintroduce
+      # column drift, switch this to `none` until the schema is re-verified.
+      ddl-auto: validate
+
+  # Flyway ON: apply classpath:db/migration (V001 init + V002 fe_alignment) at
+  # application boot. baseline-on-migrate lets Flyway adopt a pre-existing
+  # (e.g. partially-populated) database without a baseline migration.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true

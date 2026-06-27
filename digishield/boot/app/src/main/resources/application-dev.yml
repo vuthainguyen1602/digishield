@@ -1,0 +1,50 @@
+# =============================================================================
+# DEV profile — runs the backend for the React frontend (http://localhost:5173).
+#
+# Activated with: --spring.profiles.active=dev
+#
+#   * H2 in-memory DB (PostgreSQL compatibility mode), schema built from JPA
+#     entities (ddl-auto=create-drop) — NO Flyway in dev.
+#   * Permissive security (see DevSecurityConfig) + CORS for the Vite dev server.
+#   * A fixed demo tenant + seeded demo users (see auth DevDataSeeder).
+#   * RLS aspect is disabled (Postgres-only) via @Profile("!dev").
+#
+# Production / default profile (application.yml) stays on PostgreSQL + Flyway
+# + JWT + RLS and is completely unchanged.
+# =============================================================================
+spring:
+  # Keep virtual threads on (Loom) for dev parity with prod.
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: jdbc:h2:mem:digishield;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    hibernate:
+      # Dev builds the schema directly from the JPA entities (no migrations).
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: false
+    open-in-view: false
+
+  # No Flyway in dev: the schema comes from the entities above.
+  flyway:
+    enabled: false
+
+  # H2 web console (optional) at http://localhost:8080/h2-console
+  # JDBC URL: jdbc:h2:mem:digishield  (user "sa", empty password)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+# CORS allow-list for the frontend dev server (consumed by CorsConfig).
+digishield:
+  cors:
+    allowed-origins: http://localhost:5173

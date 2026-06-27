@@ -1,0 +1,76 @@
+spring:
+  application:
+    name: digishield
+
+  # Virtual threads (Java 21+ / Loom) for high-concurrency I/O.
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/digishield}
+    username: ${DB_USERNAME:digishield}
+    password: ${DB_PASSWORD:digishield}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+    open-in-view: false
+
+  # Flyway is disabled here: migrations are applied by a dedicated job/profile,
+  # not on every application boot. The migration SQL lives on the classpath at
+  # classpath:db/migration (boot/app/src/main/resources/db/migration), kept in
+  # sync with the repo-root db/migration copy.
+  flyway:
+    enabled: false
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+server:
+  port: ${SERVER_PORT:8080}
+
+---
+# API run mode
+spring:
+  config:
+    activate:
+      on-profile: api
+
+---
+# Worker run mode
+spring:
+  config:
+    activate:
+      on-profile: worker
+
+---
+# Scheduler run mode
+spring:
+  config:
+    activate:
+      on-profile: scheduler
+
+---
+# Flyway migration run mode (used by the migration job)
+spring:
+  config:
+    activate:
+      on-profile: flyway
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
