@@ -1,22 +1,24 @@
-# CD — Continuous Deployment to environments.
+# CD — single-run, sequential promotion across environments.
 #
-# Branch -> environment mapping:
-#   push to develop  -> environment "dev"        (auto, no approval)
-#   push to main     -> environment "production" (GATED: required reviewer approval
-#                       configured on the GitHub Environment must approve before the
-#                       deploy job runs)
+# Trigger: push to main (i.e. a develop->main PR was merged).
+# ONE run flows: build image once -> deploy dev -> deploy production.
+# Each stage `needs` the previous, so it's strictly sequential in a single run.
 #
-# Flow: feature -> PR into develop (deploys dev) -> PR develop->main (deploys prod).
+# The production deploy is GATED: the "production" GitHub Environment has
+# required reviewers, so the run PAUSES at that job until someone approves
+# (one "Review deployments -> Approve" click in the run). dev is automatic.
 #
-# NOTE: no infrastructure is configured yet, so the deploy step is a PLACEHOLDER.
-# The image IS built and pushed to GHCR with env-specific tags; wire the real
-# deploy (Helm / SSH+compose / PaaS) into the "Deploy" step when infra exists.
+# Build-once / promote-same-artifact: the image is built & pushed once (tagged
+# with the commit SHA); every environment deploys that exact immutable image.
+#
+# NOTE: no infrastructure yet -> deploy steps are PLACEHOLDERS. The image IS
+# pushed to GHCR; wire the real deploy (Helm / SSH+compose / ArgoCD) in later.
 
 name: cd
 
 on:
   push:
-    branches: [develop, main]
+    branches: [main]
     paths:
       - "digishield/**"
       - "deploy/**"
@@ -27,14 +29,16 @@ permissions:
   packages: write # push image to GHCR
 
 concurrency:
-  # One deploy per branch at a time; don't cancel an in-flight production deploy.
-  group: cd-${{ github.ref }}
+  # Serialize deploys; never cancel an in-flight (possibly half-approved) run.
+  group: cd-main
   cancel-in-progress: false
 
 jobs:
   build-push:
     name: Build & push image
     runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,15 +58,12 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}/app
-          # develop -> :dev ; main -> :prod + :latest + :<version> ; always :<sha>
           tags: |
-            type=raw,value=dev,enable=${{ github.ref_name == 'develop' }}
-            type=raw,value=prod,enable=${{ github.ref_name == 'main' }}
-            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
-            type=raw,value=0.1.0-SNAPSHOT,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=latest
+            type=raw,value=0.1.0-SNAPSHOT
             type=sha,format=short
 
-      - name: Build & push image
+      - name: Build & push image (built once, promoted to every env)
         uses: docker/build-push-action@v6
         with:
           context: digishield
@@ -73,34 +74,38 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy:
-    name: Deploy
+      - name: Export immutable image ref
+        id: ref
+        run: echo "image=ghcr.io/${{ github.repository }}/app:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+  deploy-dev:
+    name: Deploy dev
     needs: build-push
     runs-on: ubuntu-latest
-    # The environment drives the approval gate: "production" has required
-    # reviewers, so this job pauses for approval on main; "dev" runs immediately.
     environment:
-      name: ${{ github.ref_name == 'main' && 'production' || 'dev' }}
+      name: dev
+      # url: https://dev.<set-when-infra-exists>
+    steps:
+      - name: Deploy to dev (placeholder)
+        env:
+          IMAGE: ${{ needs.build-push.outputs.image }}
+        run: |
+          echo "Deploying $IMAGE to environment: dev"
+          echo "TODO: real deploy (Helm/SSH/ArgoCD) once infra exists, e.g.:"
+          echo "  helm upgrade --install digishield deploy/helm/digishield -f deploy/helm/digishield/values-dev.yaml --set image.tag=sha-${GITHUB_SHA::7}"
+
+  deploy-prod:
+    name: Deploy production
+    needs: [build-push, deploy-dev] # sequential after dev; build-push for image ref
+    runs-on: ubuntu-latest
+    environment:
+      name: production # required-reviewer gate: run pauses here for approval
       # url: https://<set-when-infra-exists>
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Deploy (placeholder — no infrastructure configured yet)
+      - name: Deploy to production (placeholder)
         env:
-          TARGET_ENV: ${{ github.ref_name == 'main' && 'production' || 'dev' }}
-          IMAGE: ghcr.io/${{ github.repository }}/app
+          IMAGE: ${{ needs.build-push.outputs.image }}
         run: |
-          echo "Deploying ref '${{ github.ref_name }}' to environment: $TARGET_ENV"
-          echo "Image pushed: $IMAGE  (tag: ${{ github.ref_name == 'main' && 'prod' || 'dev' }} / sha-${GITHUB_SHA::7})"
-          echo ""
-          echo "TODO: replace with a real deploy once infrastructure exists, e.g.:"
-          echo "  Kubernetes/Helm:"
-          echo "    helm upgrade --install digishield deploy/helm/digishield \\"
-          echo "      -f deploy/helm/digishield/values-\$TARGET_ENV.yaml \\"
-          echo "      --set image.repository=$IMAGE --set image.tag=${GITHUB_SHA::7}"
-          echo "  VPS / SSH + compose:"
-          echo "    ssh \$DEPLOY_HOST 'docker compose -f deploy/compose/docker-compose.yml pull && \\"
-          echo "      docker compose -f deploy/compose/docker-compose.yml up -d'"
-          echo ""
-          echo "Frontend (frontend/dist) deploy can be added as a sibling job/step."
+          echo "Deploying $IMAGE to environment: production"
+          echo "TODO: real deploy (Helm/SSH/ArgoCD) once infra exists, e.g.:"
+          echo "  helm upgrade --install digishield deploy/helm/digishield -f deploy/helm/digishield/values-prod.yaml --set image.tag=sha-${GITHUB_SHA::7}"
