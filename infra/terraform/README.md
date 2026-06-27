@@ -59,6 +59,12 @@ After `apply`, `terraform output` gives everything the app side needs:
 Then set the repo variable **`DEPLOY_ENABLED=true`** so `cd.yml` runs the real
 `helm upgrade` instead of the placeholder.
 
+**Production is double-gated.** The `deploy-prod` jobs (in `cd.yml` and
+`frontend-cd.yml`) are skipped entirely unless **`PROD_DEPLOY_ENABLED=true`**,
+on top of the `production` GitHub Environment's required-reviewer approval. Leave
+`PROD_DEPLOY_ENABLED` unset to run dev only (prod incurs no cost); set it to
+`true` **and** approve the gate when you actually want to ship production.
+
 ## API routing (SPA -> backend, same-origin)
 
 The SPA calls the API same-origin via `VITE_API_BASE_URL=/api/v1`: CloudFront
