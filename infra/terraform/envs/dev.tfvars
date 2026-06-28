@@ -21,3 +21,8 @@ redis_replicas_per_node_group = 0 # single node for dev
 # Create the account-global GitHub OIDC provider here (dev), then reference it
 # from prod (create_github_oidc_provider = false).
 create_github_oidc_provider = true
+
+# Same-origin API: CloudFront routes /api/* to the backend (the nginx ingress on
+# digishield.duckdns.org, HTTPS via Let's Encrypt). The SPA then calls the API
+# same-origin (VITE_API_BASE_URL=/api/v1), so no CORS.
+backend_api_origin_domain = "digishield.duckdns.org"
