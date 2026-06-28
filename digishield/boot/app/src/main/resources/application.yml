@@ -36,9 +36,9 @@ spring:
     type: ${CACHE_TYPE:redis}
 
   # Flyway is disabled here: migrations are applied by a dedicated job/profile,
-  # not on every application boot. The migration SQL lives on the classpath at
-  # classpath:db/migration (boot/app/src/main/resources/db/migration), kept in
-  # sync with the repo-root db/migration copy.
+  # not on every application boot. The migration SQL is the single source of
+  # truth on the classpath at classpath:db/migration
+  # (boot/app/src/main/resources/db/migration).
   flyway:
     enabled: false
     locations: classpath:db/migration
