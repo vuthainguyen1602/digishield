@@ -5,6 +5,7 @@ import { useAuth } from '@/app/auth/useAuth';
 import { NAV_BY_PERSONA, roleToPersona, type NavItem } from '@/app/auth/roles';
 import { Logo } from './Logo';
 import { RoleSwitcher } from './RoleSwitcher';
+import { cognitoEnabled } from '@/app/auth/cognito';
 import { NavIcon } from './navIcons';
 import styles from './Sidebar.module.css';
 
@@ -39,9 +40,12 @@ export function Sidebar() {
         <Logo size={26} />
       </div>
 
-      <div className={styles.switcher}>
-        <RoleSwitcher />
-      </div>
+      {/* Demo-only role switcher; with real Cognito auth the role is fixed. */}
+      {!cognitoEnabled && (
+        <div className={styles.switcher}>
+          <RoleSwitcher />
+        </div>
+      )}
 
       <nav className={styles.nav}>
         {sections.map((section, si) => (
