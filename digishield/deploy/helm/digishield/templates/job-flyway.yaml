@@ -32,4 +32,5 @@ spec:
             - "--spring.profiles.active={{ .Values.flyway.profile }}"
           env:
             {{- include "digishield.dbEnv" . | nindent 12 }}
+            {{- include "digishield.authEnv" . | nindent 12 }}
 {{- end }}

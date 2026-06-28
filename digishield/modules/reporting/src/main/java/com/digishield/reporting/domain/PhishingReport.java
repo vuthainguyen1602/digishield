@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
@@ -28,7 +27,8 @@ public class PhishingReport {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    @Lob
+    // Stored as a plain text column (see db/migration); not a LOB/oid, which
+    // would map to a PostgreSQL large object and break ddl-auto=validate.
     @Column(name = "payload")
     private String payload;
 
@@ -56,7 +56,6 @@ public class PhishingReport {
     private String sender;
 
     /** AI reasoning explaining the classification (SOC drawer). */
-    @Lob
     @Column(name = "ai_reason")
     private String aiReason;
 

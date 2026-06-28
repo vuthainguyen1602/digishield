@@ -83,6 +83,11 @@ flyway:
   enabled: true
   profile: flyway
 
+# OAuth2 resource-server. issuerUri is the OIDC issuer the app validates JWTs
+# against (e.g. a Cognito user pool). Empty by default; set per environment.
+auth:
+  issuerUri: ""
+
 service:
   type: ClusterIP
   port: 80
