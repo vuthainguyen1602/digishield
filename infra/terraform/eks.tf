@@ -25,6 +25,9 @@ module "eks" {
 
   # Grant the GitHub Actions deploy role cluster-admin so `helm upgrade` works.
   authentication_mode = "API_AND_CONFIG_MAP"
+  # The identity that runs `terraform apply` also gets cluster-admin, so the
+  # operator can run the bootstrap (kubectl/helm) right after apply.
+  enable_cluster_creator_admin_permissions = true
   access_entries = {
     github_deploy = {
       principal_arn = aws_iam_role.github_deploy.arn
