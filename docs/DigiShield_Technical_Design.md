@@ -1276,6 +1276,286 @@ erDiagram
 
 > Note: `tenant_id` replaces/is unified with `org_id` in the business tables in Sections 5 & 12. One `tenant` can map to one or more `organizations` (e.g., a corporation with multiple units).
 
+### 19.11. Implementation Guide (engineering · infrastructure · runbook)
+
+> Implementation/deployment companion to the design above (§19.1–19.10). Stack per **ADR-002: Java + Spring Boot** (realized on Java 25 + Spring Boot 4.1.0; the Java/Spring tenant-context code is in the [Realization Appendix §A5](DigiShield_ADR.md#a5-tenant-context-in-spring) of `DigiShield_ADR.md`). The snippets below are pseudo-code illustrating the concepts, applied equivalently in Spring.
+
+#### 19.11.1. Principles & Model Selection
+
+| Principle | Meaning |
+|---|---|
+| Isolate at the DB layer, not just the app layer | Enable RLS so the DB itself blocks cross-tenant leakage, even when the code has a bug |
+| `tenant_id` is a first-class citizen | Every business table, every cache/queue/storage key, every log/metric |
+| One codebase, multiple tiers | Pool (default) → Bridge → Silo/on-prem; chosen by segment & compliance |
+| Fail-closed | Missing tenant context ⇒ reject the request, return no data |
+
+**Tier selection by segment:** Schools → Pool; Enterprises → Bridge; Government Agencies → Silo/On-prem (see §19.1–19.2).
+
+#### 19.11.2. Data Layer — PostgreSQL Row-Level Security
+
+**tenant_id column + index** — every business table:
+
+```sql
+ALTER TABLE reports ADD COLUMN tenant_id uuid NOT NULL;
+CREATE INDEX idx_reports_tenant ON reports (tenant_id);
+```
+
+**Enable RLS + policy:**
+
+```sql
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reports FORCE ROW LEVEL SECURITY;   -- also applies to the table owner
+
+CREATE POLICY tenant_isolation ON reports
+  USING       (tenant_id = current_setting('app.tenant_id', true)::uuid)
+  WITH CHECK  (tenant_id = current_setting('app.tenant_id', true)::uuid);
+```
+
+- `USING` blocks READS; `WITH CHECK` blocks WRITES of wrong-tenant data.
+- `current_setting('app.tenant_id', true)`: the `true` parameter avoids an error when not set — but combined with fail-closed at the app (§19.11.3).
+
+**Non-superuser DB role** — RLS is bypassed for superuser/owner unless FORCE is used. The application must connect using a regular role:
+
+```sql
+CREATE ROLE app_user LOGIN PASSWORD '***';
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
+```
+
+**Set the tenant per transaction (note connection pooling)** — because the pool reuses connections, do **not** use `SET` (session); use `SET LOCAL` within a **transaction**:
+
+```sql
+BEGIN;
+SET LOCAL app.tenant_id = '6f1c...';   -- only lives within this transaction
+-- ... queries ...
+COMMIT;
+```
+
+> **PgBouncer:** use *transaction pooling* + `SET LOCAL` (safe). Avoid session-level `SET` because the connection is reused for another tenant.
+
+**Migration per tier:**
+
+| Tier | How to run migration |
+|---|---|
+| Pool | 1 shared schema → run once |
+| Bridge | Iterate over each tenant schema (`SET search_path`) → run sequentially, record the version per schema |
+| Silo | Each DB/tenant runs independently within that tenant's deployment pipeline |
+
+#### 19.11.3. Tenant Context at the Application Layer
+
+The access token contains the claim `tid` (tenant_id) + `org`, `role`. Authentication happens at the Gateway; the service trusts the already-verified token.
+
+Middleware that extracts & stores the context (illustration — the Java/Spring version is in the [Realization Appendix §A5](DigiShield_ADR.md#a5-tenant-context-in-spring)):
+
+```ts
+// tenant-context.ts
+import { AsyncLocalStorage } from 'async_hooks';
+export const tenantStore = new AsyncLocalStorage<{ tenantId: string }>();
+export const currentTenant = () => {
+  const ctx = tenantStore.getStore();
+  if (!ctx?.tenantId) throw new ForbiddenException('Missing tenant context'); // fail-closed
+  return ctx.tenantId;
+};
+
+// tenant.middleware.ts
+@Injectable()
+export class TenantMiddleware implements NestMiddleware {
+  use(req: Request, _res: Response, next: () => void) {
+    const tenantId = req.user?.tid;            // already decoded from the JWT
+    if (!tenantId) throw new ForbiddenException('No tenant');
+    tenantStore.run({ tenantId }, () => next());
+  }
+}
+```
+
+Apply the tenant to every DB query — wrap each request/transaction to set `app.tenant_id`:
+
+```ts
+async function withTenant<T>(db: DataSource, fn: (m: EntityManager) => Promise<T>) {
+  return db.transaction(async (m) => {
+    await m.query(`SET LOCAL app.tenant_id = $1`, [currentTenant()]);
+    return fn(m);
+  });
+}
+```
+
+> Principle: do **not** allow DB queries outside `withTenant` (lint/review blocks them). This is the last line of defense alongside RLS.
+
+#### 19.11.4. Propagating the Tenant to Cache, Queue, Storage
+
+| Infrastructure | Convention |
+|---|---|
+| Redis | Key prefix: `t:{tenantId}:user:{id}` ; scan/delete by prefix on offboard |
+| Message queue | Add `tenant_id` to the header/payload; the worker runs `SET LOCAL` before processing; consider a dedicated queue/topic per large tenant |
+| Object storage | Prefix/bucket: `s3://digishield/{tenantId}/reports/...` ; IAM policy by prefix |
+| Log / Metrics / Trace | Tag with `tenant_id` (but do NOT log sensitive personal data) |
+
+Sample worker:
+
+```ts
+queue.process(async (job) => {
+  await tenantStore.run({ tenantId: job.data.tenant_id }, async () => {
+    await withTenant(db, (m) => handle(job, m));
+  });
+});
+```
+
+#### 19.11.5. Tenant Provisioning
+
+```mermaid
+flowchart TD
+  A[Create tenant record] --> B{Tier?}
+  B -->|Pool| C[Use shared schema]
+  B -->|Bridge| D[Create dedicated schema + run migration]
+  B -->|Silo| E[Provision dedicated DB/infrastructure]
+  C --> F[Create default TenantSettings]
+  D --> F
+  E --> F
+  F --> G[Enable feature flags per Plan]
+  G --> H[Seed VN content + default courses]
+  H --> I[Configure SSO/SCIM]
+  I --> J[Create the first Org Admin + send invite]
+  J --> K[Status = active]
+```
+
+Provisioning script (condensed):
+
+```ts
+async function provisionTenant(input) {
+  const tenant = await createTenant({ name: input.name, tier: input.tier, region: 'vn', status: 'provisioning' });
+  if (input.tier === 'bridge') await createSchemaAndMigrate(tenant.id);
+  if (input.tier === 'silo')   await provisionDedicatedDb(tenant.id);   // IaC: Terraform/Helm
+  await seedDefaultSettings(tenant.id);
+  await applyPlanFeatureFlags(tenant.id, input.planId);
+  await seedDefaultContent(tenant.id);            // VN fraud scenarios, basic courses
+  await configureSso(tenant.id, input.sso);
+  await inviteOrgAdmin(tenant.id, input.adminEmail);
+  await setTenantStatus(tenant.id, 'active');
+  return tenant;
+}
+```
+
+Corresponding API: `POST /tenants`, `PATCH /tenants/{id}`, `PATCH /tenants/{id}/feature-flags` (see OpenAPI).
+
+#### 19.11.6. Feature Flags & Per-tenant Configuration
+
+- Load `feature_flags` + `tenant_settings` when initializing a session; cache by `t:{tenantId}:flags` (short TTL + invalidation on change).
+- Check flags on both the backend (block the API) and the frontend (hide the UI).
+
+```ts
+if (!await flags.enabled('deepfake_sim')) throw new ForbiddenException('Feature off for tenant');
+```
+
+- `tenant_settings`: branding (logo/color/subdomain), policy (risk threshold, mandatory training), `default_locale`.
+
+#### 19.11.7. Infrastructure Deployment per Tier
+
+**Pooled cloud (default — schools, SMB):** one K8s cluster, one shared set of services, one DB (Pool + RLS); logical tenant separation; scale out (HPA) as load grows.
+
+```yaml
+# helm values (condensed)
+deployment:
+  replicas: 3
+database:
+  mode: pool          # shared db + RLS
+  url: postgres://app_user@pg-primary/digishield
+multitenancy:
+  defaultTier: pool
+  rls: true
+```
+
+**Bridge / Dedicated (enterprise):** shared cluster but a dedicated schema per tenant; or a dedicated namespace/DB for large customers. Same Helm chart, different `values` (mode: bridge, schema per tenant).
+
+**Silo / On-premise / Air-gapped (government):** install the full suite within internal infrastructure; data kept in-country. Package images offline (internal registry), Helm chart + dedicated DB; disable unnecessary outbound calls, use an internal blacklist source synced periodically.
+
+```yaml
+multitenancy:
+  defaultTier: silo
+deployment:
+  airgapped: true
+  imageRegistry: registry.internal.gov.vn/digishield
+```
+
+**Tenant routing:** subdomain `tenantA.digishield.vn` or header → the Gateway maps to `tenant_id`. For Silo: a dedicated DNS/endpoint per agency.
+
+#### 19.11.8. CI/CD & Multi-tenant Migration
+
+- Pipeline: build → test (including tenant isolation test, §19.11.11) → deploy staging → migration → smoke test → deploy prod.
+- **Safe migration (zero-downtime):** expand → migrate → contract (add nullable columns first, backfill, then add constraints/drop the old).
+- Bridge: the migration job iterates over all schemas; records the version per tenant; can run in batches (canary a few tenants first).
+- Silo: migration lives in each tenant's deployment pipeline; controlled rollout.
+
+```bash
+# example: run migration for every schema (bridge)
+for schema in $(psql -tAc "select schema_name from tenants_schema"); do
+  psql -c "SET search_path=$schema" -f migrations/2026_06_27_add_table.sql
+done
+```
+
+#### 19.11.9. Data Residency & BYOK
+
+- **Residency:** by default stored in-country; with Silo/on-prem, data never leaves the organization's infrastructure.
+- **BYOK (envelope encryption):** each tenant has one Data Encryption Key (DEK) wrapped by a Key Encryption Key (KEK) in the tenant's KMS/HSM. Sensitive data (report payloads, PII) is encrypted with the DEK.
+- Rotate keys periodically; revoking the KEK ⇒ invalidates the tenant's data (useful at offboard).
+
+#### 19.11.10. Per-tenant Metering, Quota & Observability
+
+- **Metering:** emit usage events (`email_sent`, `sms_sent`, `ai_call`, `storage`) → aggregate into `usage_metering` per period → the source for invoices & over-limit alerts (`GET /tenants/{id}/usage`).
+- **Quota & rate-limit:** configured per Plan; block/advise when limits are reached; partition queues to avoid the "noisy neighbor" problem.
+- **Observability:** every log/metric/trace is tagged with a `tenant_id` label; dashboards filter by tenant; per-tenant alerts (e.g., a sudden spike in error rate for one tenant).
+
+#### 19.11.11. Tenant Isolation Testing
+
+Mandatory in CI — this is the "safety net" for RLS:
+
+```ts
+it('tenant A cannot read tenant B data', async () => {
+  const a = await seedTenantWithReport('A');
+  const b = await seedTenantWithReport('B');
+
+  const asA = await withTenantCtx(a.id, () => repo.find());     // set app.tenant_id = A
+  expect(asA.map(r => r.tenant_id)).toEqual([a.id]);            // sees only A
+  expect(asA.find(r => r.tenant_id === b.id)).toBeUndefined();  // does NOT see B
+});
+
+it('rejected when there is no tenant context', async () => {
+  await expect(repo.find()).rejects.toThrow('Missing tenant context'); // fail-closed
+});
+```
+
+Additional: test that writing to the wrong tenant is blocked by `WITH CHECK`; test that cache/queue prefixes do not mix.
+
+#### 19.11.12. Operations Runbook
+
+**Provision a tenant:** `POST /tenants` (name, tier, plan) → create a `provisioning` record → (Bridge/Silo) create the schema/DB + migrate → seed settings, feature flags, content; configure SSO/SCIM → invite the Org Admin; switch to `status=active`.
+
+**Suspend / Resume:** suspend (overdue/violation) via `PATCH /tenants/{id}` `status=suspended` → block login, keep data intact; resume with `status=active`.
+
+**Offboard (contract termination):**
+1. Set `status=offboarding` (read-only).
+2. **Export data** to the customer (standard format, with integrity checks).
+3. After the retention period → **permanently delete** (purge) per the Personal Data Protection Decree: delete DB records, object storage (tenant prefix), cache (prefix), and backups per the retention policy; revoke the KEK (BYOK).
+4. Record all offboard operations in `audit_logs`.
+
+Offboard checklist:
+- [ ] Notify & confirm with the customer.
+- [ ] Export + hand over the data.
+- [ ] Delete the DB/schema (per tier), storage prefix, cache prefix.
+- [ ] Revoke/destroy the encryption keys.
+- [ ] Remove the SSO/SCIM configuration, DNS/subdomain.
+- [ ] Save proof of completion (audit).
+
+#### 19.11.13. Security & Compliance Checklist
+
+- [ ] RLS enabled + FORCE on every business table; the app uses a non-superuser role.
+- [ ] Every query goes through `withTenant`; lint blocks context-less queries.
+- [ ] Fail-closed when the tenant context is missing.
+- [ ] Cache/queue/storage all carry the tenant prefix.
+- [ ] Tenant isolation tests run in CI and are a merge-blocking condition.
+- [ ] Personal data encrypted at-rest; BYOK for enterprise/gov.
+- [ ] Data residency in-country; on-prem for the government sector.
+- [ ] Audit logs separated per tenant; offboard includes export + compliant purge.
+- [ ] Quota/rate-limit per Plan; accurate metering for billing.
+
 ---
 
 *Document for development purposes. The KnowBe4 and Proofpoint feature/product names belong to their respective companies and are cited for reference only. The thresholds/timings are suggestions, to be adjusted to actual conditions.*
