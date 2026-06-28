@@ -29,6 +29,10 @@ dependencies {
     // PostgreSQL one is required or Flyway silently no-ops and JPA schema
     // validation then fails against an unmigrated database.
     runtimeOnly("org.flywaydb:flyway-database-postgresql")
+    // Spring Boot 4.x moved FlywayAutoConfiguration into its own module. Without
+    // it, flyway-core is on the classpath but Spring Boot never runs migrations
+    // (silent no-op), so JPA ddl-auto=validate fails on an unmigrated database.
+    implementation("org.springframework.boot:spring-boot-flyway")
 
     // Contracts
     implementation(project(":contracts"))
