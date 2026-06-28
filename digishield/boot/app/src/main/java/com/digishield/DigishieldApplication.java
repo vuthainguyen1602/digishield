@@ -1,7 +1,11 @@
 package com.digishield;
 
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Profile;
 import org.springframework.modulith.Modulithic;
 
 /**
@@ -18,5 +22,16 @@ public class DigishieldApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(DigishieldApplication.class, args);
+    }
+
+    /**
+     * In the {@code flyway} profile the app runs as a one-shot migration job:
+     * Flyway has already applied migrations during context startup, so close the
+     * context and exit instead of leaving the web server running forever.
+     */
+    @Bean
+    @Profile("flyway")
+    ApplicationRunner flywayMigrateAndExit(ConfigurableApplicationContext context) {
+        return args -> System.exit(SpringApplication.exit(context, () -> 0));
     }
 }
