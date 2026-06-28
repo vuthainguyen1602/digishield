@@ -51,6 +51,10 @@ externalSecrets:
   enabled: true
   remotePrefix: digishield/dev
 
+# OIDC issuer = the dev Cognito user pool (terraform output cognito_issuer_uri).
+auth:
+  issuerUri: https://cognito-idp.ap-southeast-1.amazonaws.com/ap-southeast-1_9fOw201OP
+
 # Public HTTPS entry point via ingress-nginx on an NLB with static Elastic IPs.
 # DuckDNS (digishield.duckdns.org -> NLB EIP) only supports A records, so an NLB
 # with fixed EIPs is used instead of an ALB. TLS terminates at nginx using a

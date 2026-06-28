@@ -11,6 +11,15 @@
       key: {{ .Values.database.passwordKey }}
 {{- end -}}
 
+{{/* OAuth2 resource-server issuer — shared by api/worker/scheduler/flyway. The
+     app boots a JwtDecoder from this OIDC issuer (e.g. a Cognito user pool). */}}
+{{- define "digishield.authEnv" -}}
+{{- with .Values.auth.issuerUri }}
+- name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
+  value: {{ . | quote }}
+{{- end }}
+{{- end -}}
+
 {{/* Redis env — shared by api/worker/scheduler (REDIS_PASSWORD only when a secret is set). */}}
 {{- define "digishield.redisEnv" -}}
 - name: REDIS_HOST
