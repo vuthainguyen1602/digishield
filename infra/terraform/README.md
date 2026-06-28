@@ -189,6 +189,12 @@ terraform plan -destroy -var-file=envs/dev.tfvars   # review first
 terraform destroy -var-file=envs/dev.tfvars
 ```
 
+To decommission **production** use `./destroy-prod.sh` (for teardown only, not
+cost-pausing). It additionally disables the RDS `deletion_protection` first,
+takes a **final DB snapshot** (`digishield-prod-db-final`, restorable), and
+**never** deletes the shared ECR repo / OIDC provider (owned by dev). Confirm by
+typing `destroy production`.
+
 Notes:
 
 - **Irreversible.** Dev RDS uses `skip_final_snapshot=true` → no snapshot, data
