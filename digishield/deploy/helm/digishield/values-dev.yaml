@@ -63,7 +63,10 @@ ingress:
   enabled: true
   className: nginx
   path: /api
-  host: digishield.duckdns.org
+  # No host rule: match /api on any Host so CloudFront (origin = NLB DNS name,
+  # which becomes the forwarded Host) routes through. Direct HTTPS on
+  # digishield.duckdns.org still works via the TLS SNI block below.
+  host: ""
   tls:
     - hosts:
         - digishield.duckdns.org

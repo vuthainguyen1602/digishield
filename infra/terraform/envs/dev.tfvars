@@ -22,7 +22,10 @@ redis_replicas_per_node_group = 0 # single node for dev
 # from prod (create_github_oidc_provider = false).
 create_github_oidc_provider = true
 
-# Same-origin API: CloudFront routes /api/* to the backend (the nginx ingress on
-# digishield.duckdns.org, HTTPS via Let's Encrypt). The SPA then calls the API
-# same-origin (VITE_API_BASE_URL=/api/v1), so no CORS.
-backend_api_origin_domain = "digishield.duckdns.org"
+# Same-origin API: CloudFront routes /api/* to the backend. The origin is the
+# NLB's stable AWS DNS name (not the flaky free DuckDNS), over HTTP — there's no
+# ACM cert for an *.elb.amazonaws.com name, and viewer->CloudFront stays HTTPS.
+# The nginx ingress matches /api on any Host (ingress.host=""), so CloudFront's
+# Host (the NLB name) routes fine.
+backend_api_origin_domain          = "k8s-ingressn-ingressn-fddd1e0067-56af5064dc54630c.elb.ap-southeast-1.amazonaws.com"
+backend_api_origin_protocol_policy = "http-only"
