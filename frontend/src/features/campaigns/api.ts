@@ -96,3 +96,32 @@ export function useCreateCampaign() {
     mutationFn: (body: CreateCampaignRequest) => createCampaign(body),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Target groups (audience picker) — GET /groups
+// ---------------------------------------------------------------------------
+
+/** Mirrors `Group` from the tenancy module (snake_case `rule_json`). */
+export interface SmartGroup {
+  id: string;
+  name: string | null;
+  /** present → the group membership is computed from dynamic conditions */
+  rule_json?: unknown;
+}
+
+/** GET /groups — the tenant's target groups (static + smart). */
+export function fetchGroups(signal?: AbortSignal): Promise<SmartGroup[]> {
+  return apiRequest<SmartGroup[]>({
+    url: '/groups',
+    method: 'GET',
+    ...(signal ? { signal } : {}),
+  });
+}
+
+/** TanStack Query hook powering the audience step in {@link CampaignWizardPage}. */
+export function useGroups() {
+  return useQuery({
+    queryKey: queryKeys.groups,
+    queryFn: ({ signal }) => fetchGroups(signal),
+  });
+}

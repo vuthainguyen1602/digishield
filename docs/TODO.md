@@ -54,8 +54,12 @@ Repo already wires **Cognito** (`feat/cognito-login`); confirm which path each e
 - [ ] `_shared/mockData.ts` — remove once the pages above use generated hooks
 - [x] `content` template library — added `GET /ai/templates` (backend) and wired the
       library via `useTemplates()` (was a static array)
-- [ ] Static reference data still needing GET endpoints: `campaigns`
-      (channels/templates/groups), `admin` (thresholds, point rules, run history)
+- [x] `campaigns` wizard — templates load from `GET /ai/templates`, audience from
+      `GET /groups`; the selected template id is now sent on create. Channels stay a
+      fixed enum (UI choice, not data). Note: the create endpoint doesn't yet accept the
+      audience group, and `Group` carries no member count.
+- [ ] Static reference data still needing GET endpoints: `admin` (thresholds, point
+      rules, run history)
 - [ ] `shared/.../TenantFilter.java` (L55) — read the `tid` claim from the JWT
       (currently falls back to a header) when the resource-server is integrated
 

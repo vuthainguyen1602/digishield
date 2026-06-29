@@ -22,6 +22,7 @@ export const queryKeys = {
   compliancePolicies: ['compliance', 'policies'] as const,
   complianceStatus: ['compliance', 'status'] as const,
   simCampaign: (id: string) => ['sim', 'campaign', id] as const,
+  groups: ['tenancy', 'groups'] as const,
   // Tenancy (admin org settings)
   tenantSettings: (tenantId: string) => ['tenancy', 'settings', tenantId] as const,
   featureFlags: (tenantId: string) => ['tenancy', 'feature-flags', tenantId] as const,

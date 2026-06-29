@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, MessageSquare, QrCode, Smartphone, Sparkles } from 'lucide-react';
 import { Button, Stepper, useToast } from '@/shared/ui';
-import { useCreateCampaign } from './api';
+import { useCreateCampaign, useGroups, type SmartGroup } from './api';
+import { useTemplates, type SimTemplate } from '../content/api';
 
 /**
  * CampaignWizardPage — 5-step simulation campaign wizard.
@@ -10,7 +11,9 @@ import { useCreateCampaign } from './api';
  *
  * The final launch step posts to the live backend via `useCreateCampaign()`
  * (`POST /sim/campaigns`); on success it toasts and navigates to the results
- * page. Channels/templates/groups remain static (no GET endpoints).
+ * page. The template step loads `GET /ai/templates` and the audience step loads
+ * `GET /groups`. The channel list stays a fixed enum (it is the `Channel` enum,
+ * not tenant data).
  */
 
 /** Map the wizard channel id onto the backend `Channel` enum (UPPERCASE). */
@@ -36,32 +39,48 @@ const channels = [
   { id: 'zalo', icon: Smartphone, title: 'Zalo / Teams / Viber', desc: 'Tin nhắn nội bộ giả qua chat platform' },
 ] as const;
 
-const templates = [
-  { id: 't1', title: 'Khóa tài khoản ngân hàng', diff: 'Khó', diffDots: '●●●', diffColor: 'var(--color-red)' },
-  { id: 't2', title: 'Hoàn tiền học phí', diff: 'Trung bình', diffDots: '●●○', diffColor: 'var(--color-amber)' },
-  { id: 't3', title: 'Giao hàng thất bại', diff: 'Dễ', diffDots: '●○○', diffColor: 'var(--color-teal)' },
-] as const;
+interface TemplateCard {
+  id: string;
+  title: string;
+  diff: string;
+  diffDots: string;
+  diffColor: string;
+}
 
-const groups = [
-  {
-    id: 'g1',
-    title: 'Tất cả nhân viên',
-    sub: '1.240 người · Cơ quan ABC',
-    badge: { text: 'Cảnh báo: >500 người', color: 'var(--color-amber)', bg: 'rgba(224,138,11,.1)' },
-  },
-  {
-    id: 'g2',
-    title: 'Phòng Kế toán + Kinh doanh',
-    sub: '212 người · Risk score >60',
-    badge: null,
-  },
-  {
-    id: 'g3',
-    title: 'Nhóm thông minh: Chưa hoàn thành đào tạo',
-    sub: '87 người · Tự cập nhật theo điều kiện',
-    smart: true,
-  },
-] as const;
+/** Localized difficulty label / dots / colour for a backend difficulty. */
+function difficultyOf(difficulty: string): { diff: string; diffDots: string; diffColor: string } {
+  switch (difficulty) {
+    case 'hard':
+      return { diff: 'Khó', diffDots: '●●●', diffColor: 'var(--color-red)' };
+    case 'medium':
+      return { diff: 'Trung bình', diffDots: '●●○', diffColor: 'var(--color-amber)' };
+    default:
+      return { diff: 'Dễ', diffDots: '●○○', diffColor: 'var(--color-teal)' };
+  }
+}
+
+/** Map a backend `SimTemplate` onto the template-step card. */
+function toTemplateCard(dto: SimTemplate): TemplateCard {
+  return { id: dto.id, title: dto.subject, ...difficultyOf(dto.difficulty) };
+}
+
+interface GroupCard {
+  id: string;
+  title: string;
+  sub: string;
+  smart: boolean;
+}
+
+/** Map a backend `Group` onto the audience-step card. */
+function toGroupCard(dto: SmartGroup): GroupCard {
+  const smart = dto.rule_json != null;
+  return {
+    id: dto.id,
+    title: dto.name ?? '—',
+    sub: smart ? 'Nhóm thông minh · tự cập nhật theo điều kiện' : 'Nhóm tĩnh',
+    smart,
+  };
+}
 
 const sendSpeeds = [
   'Ngay lập tức (gửi tất cả cùng lúc)',
@@ -86,6 +105,17 @@ export default function CampaignWizardPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const createCampaign = useCreateCampaign();
+  const templatesQuery = useTemplates();
+  const groupsQuery = useGroups();
+
+  const templates = useMemo<TemplateCard[]>(
+    () => (templatesQuery.data ?? []).map(toTemplateCard),
+    [templatesQuery.data],
+  );
+  const groups = useMemo<GroupCard[]>(
+    () => (groupsQuery.data ?? []).map(toGroupCard),
+    [groupsQuery.data],
+  );
 
   const [step, setStep] = useState(1);
   const [channel, setChannel] = useState<string | null>(null);
@@ -104,8 +134,10 @@ export default function CampaignWizardPage() {
 
   const launch = () => {
     const enumChannel = channel ? CHANNEL_ENUM[channel] ?? 'EMAIL' : 'EMAIL';
+    // POST /sim/campaigns only accepts channel + templateId today; the selected
+    // audience group is captured in the UI but not yet part of the create payload.
     createCampaign.mutate(
-      { channel: enumChannel, templateId: null },
+      { channel: enumChannel, templateId: template },
       {
         onSuccess: (created) => {
           toast.push({ msg: 'Đã phát động chiến dịch mô phỏng', variant: 'success' });
@@ -203,6 +235,11 @@ export default function CampaignWizardPage() {
                 Select simulation template
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(templatesQuery.isLoading || (!templatesQuery.isLoading && templates.length === 0)) && (
+                  <div style={{ fontSize: 12.5, color: 'var(--color-muted)', padding: '4px 2px' }}>
+                    {templatesQuery.isLoading ? 'Đang tải mẫu…' : 'Chưa có mẫu nào — tạo bằng AI bên dưới.'}
+                  </div>
+                )}
                 {templates.map((t) => {
                   const sel = template === t.id;
                   return (
@@ -325,6 +362,11 @@ export default function CampaignWizardPage() {
               Chọn nhóm người dùng sẽ nhận email mô phỏng
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {(groupsQuery.isLoading || (!groupsQuery.isLoading && groups.length === 0)) && (
+                <div style={{ fontSize: 12.5, color: 'var(--color-muted)', padding: '4px 2px' }}>
+                  {groupsQuery.isLoading ? 'Đang tải nhóm…' : 'Chưa có nhóm đối tượng nào.'}
+                </div>
+              )}
               {groups.map((g) => {
                 const sel = group === g.id;
                 return (
@@ -352,21 +394,7 @@ export default function CampaignWizardPage() {
                       </div>
                       <div style={{ fontSize: 13, color: 'var(--color-muted)' }}>{g.sub}</div>
                     </div>
-                    {'badge' in g && g.badge && (
-                      <span
-                        style={{
-                          fontSize: 12,
-                          color: g.badge.color,
-                          background: g.badge.bg,
-                          padding: '4px 10px',
-                          borderRadius: 99,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {g.badge.text}
-                      </span>
-                    )}
-                    {'smart' in g && g.smart && (
+                    {g.smart && (
                       <span
                         style={{
                           background: 'rgba(37,102,235,.1)',
