@@ -64,8 +64,10 @@ Repo already wires **Cognito** (`feat/cognito-login`); confirm which path each e
       (new `business_thresholds` table); sliders load + save the real values
 - [x] gamification point rules — added `GET /gamification/point-rules` (new
       `point_rule` table); GamificationPage loads them (was a static array)
-- [ ] `shared/.../TenantFilter.java` (L55) — read the `tid` claim from the JWT
-      (currently falls back to a header) when the resource-server is integrated
+- [x] `shared/.../TenantFilter.java` — now reads the `tid` claim from the validated
+      JWT (resource-server) via `SecurityContextHolder`; dropped the forgeable
+      `X-Tenant-Id` header fallback in production (fails closed without a claim).
+      Cognito must emit the `tid` claim for prod.
 
 ---
 
