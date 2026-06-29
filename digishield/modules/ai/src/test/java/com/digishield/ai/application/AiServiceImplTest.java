@@ -4,7 +4,9 @@ import com.digishield.ai.api.dto.ClassificationView;
 import com.digishield.ai.api.dto.ModerationView;
 import com.digishield.ai.api.dto.SimTemplateView;
 import com.digishield.ai.domain.AiTemplate;
+import com.digishield.ai.domain.Difficulty;
 import com.digishield.ai.domain.TemplateChannel;
+import com.digishield.ai.domain.TemplateStatus;
 import com.digishield.ai.infrastructure.AiTemplateRepository;
 import com.digishield.shared.tenantcontext.TenantContext;
 import org.junit.jupiter.api.AfterEach;
@@ -15,6 +17,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,6 +70,26 @@ class AiServiceImplTest {
         assertThat(view.difficulty()).isIn("easy", "medium", "hard");
         assertThat(view.status()).isEqualTo("draft");
         verify(templateRepository).save(any(AiTemplate.class));
+    }
+
+    @Test
+    void listTemplates_returnsTenantTemplatesAsLowercaseViews() {
+        // Arrange
+        AiTemplate t = new AiTemplate(
+                UUID.randomUUID(), TENANT_ID, TemplateChannel.SMS, "Thông báo",
+                "tmpl/sms/x", Difficulty.EASY, TemplateStatus.APPROVED);
+        when(templateRepository.findByTenantId(TENANT_ID)).thenReturn(List.of(t));
+
+        // Act
+        List<SimTemplateView> views = aiService.listTemplates();
+
+        // Assert: enum-backed fields emitted as lowercase, mapped per tenant
+        assertThat(views).hasSize(1);
+        SimTemplateView v = views.get(0);
+        assertThat(v.channel()).isEqualTo("sms");
+        assertThat(v.difficulty()).isEqualTo("easy");
+        assertThat(v.status()).isEqualTo("approved");
+        assertThat(v.subject()).isEqualTo("Thông báo");
     }
 
     @Test

@@ -1,5 +1,6 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/shared/api/client';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 /**
  * Thin, hand-written typed mutation for the Content Studio "generate" action.
@@ -34,5 +35,35 @@ export function generateTemplate(body: GenerateTemplateRequest): Promise<Templat
 export function useGenerateTemplate() {
   return useMutation({
     mutationFn: (body: GenerateTemplateRequest) => generateTemplate(body),
+  });
+}
+
+/**
+ * Wire shape of `SimTemplate` (`GET /ai/templates`). Enum-backed fields are
+ * lowercase and the body reference is snake_case (`body_ref`), matching the BE.
+ */
+export interface SimTemplate {
+  id: string;
+  channel: string;
+  subject: string;
+  body_ref: string;
+  difficulty: string;
+  status: string;
+}
+
+/** GET /ai/templates — the saved simulation-template library for the tenant. */
+export function fetchTemplates(signal?: AbortSignal): Promise<SimTemplate[]> {
+  return apiRequest<SimTemplate[]>({
+    url: '/ai/templates',
+    method: 'GET',
+    ...(signal ? { signal } : {}),
+  });
+}
+
+/** TanStack Query hook powering the template library in {@link ContentStudioPage}. */
+export function useTemplates() {
+  return useQuery({
+    queryKey: queryKeys.aiTemplates,
+    queryFn: ({ signal }) => fetchTemplates(signal),
   });
 }

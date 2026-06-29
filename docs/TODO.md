@@ -52,8 +52,10 @@ Repo already wires **Cognito** (`feat/cognito-login`); confirm which path each e
 - [x] `certificates/CertificatePage.tsx` — Download = browser print-to-PDF; Share = copy
       the verification link (no backend PDF/share endpoint exists)
 - [ ] `_shared/mockData.ts` — remove once the pages above use generated hooks
-- [ ] Static reference data needing GET endpoints: `campaigns` (channels/templates/groups),
-      `content` (template library), `admin` (thresholds, point rules, run history)
+- [x] `content` template library — added `GET /ai/templates` (backend) and wired the
+      library via `useTemplates()` (was a static array)
+- [ ] Static reference data still needing GET endpoints: `campaigns`
+      (channels/templates/groups), `admin` (thresholds, point rules, run history)
 - [ ] `shared/.../TenantFilter.java` (L55) — read the `tid` claim from the JWT
       (currently falls back to a header) when the resource-server is integrated
 

@@ -5,6 +5,7 @@ import com.digishield.ai.api.dto.ModerationView;
 import com.digishield.ai.api.dto.SimTemplateView;
 import com.digishield.ai.domain.TemplateChannel;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -20,6 +21,12 @@ public interface AiService {
      * given channel / industry / season and persists it for the current tenant.
      */
     SimTemplateView generateTemplate(TemplateChannel channel, String industry, String season);
+
+    /**
+     * Lists the saved simulation-template library for the current tenant
+     * (most-recently the seeded/generated drafts).
+     */
+    List<SimTemplateView> listTemplates();
 
     /**
      * Classifies a reported email payload and returns a label, confidence and

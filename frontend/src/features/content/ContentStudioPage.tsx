@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button, useToast } from '@/shared/ui';
 import { Check, Sparkles } from 'lucide-react';
-import { useGenerateTemplate } from './api';
+import { useGenerateTemplate, useTemplates, type SimTemplate } from './api';
 
 /**
  * ContentStudioPage — AI-assisted template authoring.
@@ -9,8 +9,8 @@ import { useGenerateTemplate } from './api';
  *
  * The "Sinh bằng AI" action posts to the live backend via
  * `useGenerateTemplate()` (`POST /ai/templates/generate`) and fills the editor
- * with the returned draft. The template library remains static (no GET
- * endpoint), and Save/Submit remain UI-only.
+ * with the returned draft. The template library is loaded from the live backend
+ * via `useTemplates()` (`GET /ai/templates`). Save/Submit remain UI-only.
  */
 
 type Filter = 'all' | 'email' | 'sms';
@@ -20,14 +20,39 @@ type Template = {
   title: string;
   status: 'Approved' | 'Draft';
   meta: string;
-  channel: 'email' | 'sms';
+  channel: string;
 };
 
-const templates: Template[] = [
-  { id: 't1', title: 'Hoàn tiền học phí', status: 'Approved', meta: 'Email · ●●○', channel: 'email' },
-  { id: 't2', title: 'Khóa tài khoản ngân hàng', status: 'Approved', meta: 'Email · ●●●', channel: 'email' },
-  { id: 't3', title: 'OTP Brandname giả', status: 'Draft', meta: 'SMS · ●●○', channel: 'sms' },
-];
+const CHANNEL_LABELS: Record<string, string> = {
+  email: 'Email',
+  sms: 'SMS',
+  zalo: 'Zalo',
+  voice: 'Voice',
+  qr: 'QR',
+  usb: 'USB',
+  teams: 'Teams',
+  slack: 'Slack',
+};
+
+/** Render difficulty as filled/empty dots, matching the design's `●●○`. */
+const DIFFICULTY_DOTS: Record<string, string> = {
+  easy: '●○○',
+  medium: '●●○',
+  hard: '●●●',
+};
+
+/** Map a backend `SimTemplate` onto the library card view model. */
+function toTemplate(dto: SimTemplate): Template {
+  const channelLabel = CHANNEL_LABELS[dto.channel] ?? dto.channel;
+  const dots = DIFFICULTY_DOTS[dto.difficulty] ?? '●○○';
+  return {
+    id: dto.id,
+    title: dto.subject,
+    status: dto.status === 'approved' ? 'Approved' : 'Draft',
+    meta: `${channelLabel} · ${dots}`,
+    channel: dto.channel,
+  };
+}
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--color-surface)',
@@ -38,13 +63,15 @@ const cardStyle: React.CSSProperties = {
 export default function ContentStudioPage() {
   const toast = useToast();
   const generate = useGenerateTemplate();
+  const { data, isLoading, isError } = useTemplates();
   const [filter, setFilter] = useState<Filter>('all');
-  const [selected, setSelected] = useState('t1');
+  const [selected, setSelected] = useState('');
   const [title, setTitle] = useState('Thông báo hoàn học phí học kỳ II');
   const [body, setBody] = useState(
     'Kính gửi sinh viên/học viên,\n\nTheo quy định Bộ GD&ĐT, nhà trường sẽ hoàn học phí HK2 cho các trường hợp đủ điều kiện. Vui lòng xác nhận thông tin ngân hàng tại đây trước 30/06/2026.',
   );
 
+  const templates = useMemo<Template[]>(() => (data ?? []).map(toTemplate), [data]);
   const visible = templates.filter((t) => filter === 'all' || t.channel === filter);
 
   const handleGenerate = () => {
@@ -137,6 +164,15 @@ export default function ContentStudioPage() {
             </div>
 
             <div style={{ padding: 8 }}>
+              {(isLoading || isError || visible.length === 0) && (
+                <div style={{ padding: '16px 8px', fontSize: 12.5, color: 'var(--color-muted)' }}>
+                  {isLoading
+                    ? 'Đang tải thư viện…'
+                    : isError
+                      ? 'Không tải được thư viện.'
+                      : 'Chưa có mẫu nào trong thư viện.'}
+                </div>
+              )}
               {visible.map((t) => {
                 const sel = selected === t.id;
                 return (

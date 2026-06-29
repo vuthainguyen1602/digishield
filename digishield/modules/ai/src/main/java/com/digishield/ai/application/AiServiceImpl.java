@@ -75,6 +75,15 @@ public class AiServiceImpl implements AiService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<SimTemplateView> listTemplates() {
+        UUID tenantId = TenantContext.requireUuid();
+        return templateRepository.findByTenantId(tenantId).stream()
+                .map(this::toView)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ClassificationView classify(String payload) {
         // TODO: call the real classification model. Deterministic keyword stub below.
         String text = payload == null ? "" : payload.toLowerCase(Locale.ROOT);
