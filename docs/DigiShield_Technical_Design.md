@@ -13,7 +13,7 @@
 3. [Component Diagram (Container/Component)](#3-component-diagram-containercomponent)
 4. [Deployment Diagram](#4-deployment-diagram)
 5. [Data Model (ER Diagram)](#5-data-model-er-diagram)
-6. [Sequence Diagrams (Business Flows)](#6-sequence-diagrams-business-flows)
+6. [Business Flow Diagrams](#6-business-flow-diagrams)
 7. [State Diagrams (Entity Lifecycles)](#7-state-diagrams-entity-lifecycles)
 8. [Flowchart – Risk Score Calculation](#8-flowchart--risk-score-calculation)
 9. [REST API Specification](#9-rest-api-specification)
@@ -324,7 +324,7 @@ erDiagram
 
 ---
 
-## 6. Sequence Diagrams (Business Flows)
+## 6. Business Flow Diagrams
 
 ### 6.1. SSO Login (SAML/OAuth)
 
@@ -385,37 +385,54 @@ sequenceDiagram
 
 ### 6.3. User Reports Phishing Email → AI Classifies → Blacklist Check → Alert Broadcast
 
-**Description:** The "Report & Alert" flow. The Learner clicks the report button from the extension/add-in → the Reporting Service stores the report → the **AI Service classifies** it (clean/spam/threat + confidence) → checks against the **blacklist**. The `alt` block represents the decision branch: if confidence *exceeds the auto threshold*, the email is mass-quarantined immediately; if uncertain, it goes into the **triage queue** for an Analyst to decide. When confirmed as a real threat, the Notification Service **broadcasts a realtime alert** to the whole organization over WebSocket. This is the "collective intelligence" loop: one person reports, the whole organization is protected.
+**Description:** The "Report & Alert" flow, shown as a swimlane process (each lane = a service/actor that owns the step). The Learner clicks the report button from the extension/add-in → the Reporting Service stores the report → the **AI Service classifies** it (clean/spam/threat + confidence) → checks against the **blacklist**. The **gateway** `confidence >= auto threshold?` is the decision branch: if confidence *exceeds the auto threshold*, the email is mass-quarantined immediately; if uncertain, it goes into the **triage queue** for an Analyst to decide. When confirmed as a real threat, the Notification Service **broadcasts a realtime alert** to the whole organization over WebSocket. This is the "collective intelligence" loop: one person reports, the whole organization is protected.
 
 ```mermaid
-sequenceDiagram
-    actor L as Learner
-    participant BX as Browser Ext / Add-in
-    participant GW as API Gateway
-    participant REP as Reporting Service
-    participant AIS as AI Service
-    participant BL as Blacklist Store
-    actor AN as Analyst SOC
-    participant NOT as Notification Service
-    participant WS as WebSocket Hub
+flowchart TB
+    classDef ev fill:#d4edda,stroke:#28a745,color:#155724;
 
-    L->>BX: Click "Report phishing"
-    BX->>GW: POST /reports/phishing (payload)
-    GW->>REP: Store report (status=new)
-    REP->>AIS: Request classification
-    AIS-->>REP: {label, confidence, reason}
-    REP->>BL: Check URL/phone/account
-    BL-->>REP: matched? (true/false)
-    alt confidence >= auto threshold
-        REP->>NOT: Mass-quarantine email + alert
-    else needs review
-        REP-->>AN: Show in triage queue
-        AN->>GW: POST /reports/{id}/triage (decision)
-        GW->>REP: Update status + update blacklist
+    subgraph L[Learner]
+        A([Start: Click 'Report phishing']):::ev
+        Z([Receive realtime alert]):::ev
     end
-    REP->>NOT: Broadcast alert if threat
-    NOT->>WS: Broadcast to whole organization
-    WS-->>L: Realtime alert notification
+
+    subgraph EXT[Browser Ext / API Gateway]
+        B[POST /reports/phishing]
+    end
+
+    subgraph REP[Reporting Service]
+        C[Store report status=new]
+        D[Request AI classification]
+        E[Check blacklist]
+        G{confidence >= auto threshold?}
+        H[Mass-quarantine email]
+        I[Update status + blacklist]
+    end
+
+    subgraph AIS[AI Service]
+        D2[Classify: label, confidence, reason]
+    end
+
+    subgraph BL[Blacklist Store]
+        E2[Lookup URL/phone/account]
+    end
+
+    subgraph AN[Analyst SOC]
+        T[Triage queue review]
+        U[POST /reports/id/triage decision]
+    end
+
+    subgraph NOT[Notification / WebSocket Hub]
+        N[Broadcast alert to whole org]
+    end
+
+    A --> B --> C --> D
+    D --> D2 --> E
+    E --> E2 --> G
+    G -- yes --> H --> N
+    G -- "no, needs review" --> T --> U --> I
+    I -- confirmed threat --> N
+    N --> Z
 ```
 
 ### 6.4. Adaptive Learning Framework – Risk-based Auto-enrollment

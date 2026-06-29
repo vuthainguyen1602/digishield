@@ -8,14 +8,21 @@ environment (`dev`, `prod`):
 - **RDS PostgreSQL** (+ SG, private) — `rds.tf`
 - **ElastiCache Redis** (TLS + auth token, private) — `redis.tf`
 - **Secrets Manager** `digishield/<env>/db` and `/redis` — `secrets.tf`
-- **IAM**: GitHub Actions OIDC deploy role (`iam_github_oidc.tf`) + IRSA role for
-  External Secrets Operator (`iam_irsa.tf`)
+- **Cognito** user pool + SPA client + role groups (`super_admin`, `org_admin`,
+  `analyst`, `learner`) — `cognito.tf`. Drives the app's auth/RBAC.
+- **IAM IRSA roles**: External Secrets Operator (`iam_irsa.tf`) **and** AWS Load
+  Balancer Controller (`lb_controller.tf`), plus the GitHub Actions OIDC deploy
+  role (`iam_github_oidc.tf`).
+- **NLB Elastic IPs**: static EIPs the ingress-nginx NLB binds to, so the public
+  IPs survive add-on reinstalls — `lb_controller.tf`.
 - **Frontend CDN**: private S3 bucket + CloudFront (OAC, SPA fallback) for the
-  React/Vite SPA — `frontend_cdn.tf`. Set custom domains via
-  `frontend_domain_aliases` + `frontend_acm_certificate_arn` (ACM in us-east-1).
+  React/Vite SPA — `frontend_cdn.tf`. CloudFront also routes `/api/*` to the
+  backend (same-origin) via `backend_api_origin_domain`. Set custom SPA domains
+  via `frontend_domain_aliases` + `frontend_acm_certificate_arn` (ACM in
+  us-east-1).
 
-> Scaffold — review and run `terraform plan` before `apply`. Placeholders
-> (`<ACCOUNT_ID>`, sizes, region, CIDRs) live in `envs/*.tfvars` and `envs/*.hcl`.
+> Placeholders (`<ACCOUNT_ID>`, sizes, region, CIDRs) live in `envs/*.tfvars`
+> and `envs/*.hcl`. Review and run `terraform plan` before `apply`.
 
 ## How this fits together (read first)
 
@@ -26,19 +33,25 @@ gated by `DEPLOY_ENABLED`. Provisioning is a **deliberate, manual** step
 (infra changes are high-risk and want a reviewed `plan`), so you run Terraform
 yourself the first time and whenever infra changes.
 
-End-to-end order for a **dev**-only setup (prod stays off, see the prod gate):
+This README is the per-resource reference. For the **canonical end-to-end dev
+bring-up** (Terraform → add-ons → TLS cert → DNS → Cognito users → CD), follow
+[`../RUNBOOK-dev.md`](../RUNBOOK-dev.md). The shape of a dev-only setup (prod
+stays off, see the prod gate):
 
 1. **Bootstrap** the remote-state bucket + lock table (once per account).
 2. **Provision** dev infra with Terraform (`apply`).
-3. **Install cluster add-ons** (External Secrets Operator + AWS Load Balancer
-   Controller) and create the ClusterSecretStore.
-4. **Wire `terraform output` → GitHub** variables/secret (table below).
-5. Set `DEPLOY_ENABLED=true` and push to `main` → CD deploys backend + frontend.
-6. **Finish API routing**: feed the ALB DNS into `backend_api_origin_domain` and
-   re-apply (CloudFront then routes `/api/*` to the backend).
+3. **Install cluster add-ons** with [`../bootstrap-addons.sh`](../bootstrap-addons.sh):
+   External Secrets Operator (+ ClusterSecretStore), the AWS Load Balancer
+   Controller, and ingress-nginx fronted by an NLB on the static EIPs.
+4. **Issue the TLS cert** (Let's Encrypt via DuckDNS DNS-01) and **point DNS** at
+   an NLB EIP — operator steps, see the runbook.
+5. **Add Cognito users** to role groups (the user pool is Terraform-managed).
+6. **Wire `terraform output` → GitHub** variables/secret (table below), set
+   `DEPLOY_ENABLED=true`, push to `main` → CD deploys backend + frontend.
 
 Prerequisites on your machine: AWS CLI (logged in), `terraform`, `kubectl`,
-`helm`. Get the account id with `aws sts get-caller-identity`.
+`helm`, plus an acme.sh checkout for the TLS step. Get the account id with
+`aws sts get-caller-identity`.
 
 ## 1. Bootstrap remote state (once per account)
 
@@ -77,29 +90,34 @@ terraform apply -var-file=envs/prod.tfvars
 
 EKS + RDS take ~15–20 min. Secrets Manager `digishield/<env>/db` and `/redis`
 are populated automatically (generated passwords) — no manual secret creation.
+`apply` also grants the apply-er cluster-admin
+(`enable_cluster_creator_admin_permissions`), so no manual EKS access entry is
+needed before `kubectl`.
+
+> **Free-plan note (dev):** `dev.tfvars` pins free-tier-eligible classes —
+> `m7i-flex.large` for the node (t3.large is blocked) and `db.t3.micro` for RDS.
+> The RDS engine is pinned to an available `16.x`. The CloudFront `/api/*` origin
+> is the NLB's stable AWS DNS name over HTTP (no ACM cert exists for an
+> `*.elb.amazonaws.com` name; viewer→CloudFront stays HTTPS).
 
 ## 3. Cluster add-ons (after EKS exists)
 
+Run the bootstrap script — it reads Terraform outputs and is idempotent:
+
 ```bash
-aws eks update-kubeconfig --name digishield-dev --region ap-southeast-1
-
-# External Secrets Operator — pulls DB/Redis creds from Secrets Manager.
-helm repo add external-secrets https://charts.external-secrets.io
-helm upgrade --install external-secrets external-secrets/external-secrets \
-  -n external-secrets --create-namespace
-
-# Annotate its ServiceAccount with the IRSA role (terraform output
-# external_secrets_irsa_role_arn) so it can read Secrets Manager:
-kubectl -n external-secrets annotate serviceaccount external-secrets \
-  eks.amazonaws.com/role-arn="$(terraform output -raw external_secrets_irsa_role_arn)" --overwrite
-
-# AWS Load Balancer Controller — REQUIRED for the API Ingress/ALB.
-helm repo add eks https://aws.github.io/eks-charts
-helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
-  -n kube-system --set clusterName=digishield-dev
+./infra/bootstrap-addons.sh
 ```
 
-Then create the ClusterSecretStore (below).
+It installs:
+
+- **External Secrets Operator** (+ the `aws-secretsmanager` ClusterSecretStore),
+  annotated with the ESO IRSA role so it can read Secrets Manager.
+- **AWS Load Balancer Controller** (IRSA role from `lb_controller.tf`).
+- **ingress-nginx**, fronted by an internet-facing **NLB pinned to the static
+  EIPs**, cross-zone across the public subnets.
+
+It prints the EIP allocation ids. There is **no ALB** — the API is served through
+the ingress-nginx NLB.
 
 ## 4. Wire outputs to GitHub Actions
 
@@ -110,17 +128,23 @@ After `apply`, `terraform output` gives everything the app side needs:
 | `eks_cluster_name` | GitHub Actions **variable** `EKS_CLUSTER_NAME` |
 | `region` | GitHub Actions **variable** `AWS_REGION` |
 | `github_deploy_role_arn` | GitHub Actions **secret** `AWS_DEPLOY_ROLE_ARN` (repo-level + per Environment) |
-| `rds_endpoint` | `deploy/helm/digishield/values-<env>.yaml` → `database.url` |
-| `redis_endpoint` | `values-<env>.yaml` → `redis.host` |
-| `external_secrets_irsa_role_arn` | annotate the ESO ServiceAccount: `eks.amazonaws.com/role-arn` |
-| `secrets_manager_prefix` | matches Helm `externalSecrets.remotePrefix` (`digishield/<env>`) |
 | `frontend_bucket` | GitHub Actions **variable** `FRONTEND_BUCKET` (FE CD runs `aws s3 sync frontend/dist s3://<this>`) |
 | `frontend_distribution_id` | GitHub Actions **variable** `FRONTEND_DISTRIBUTION_ID` (FE CD invalidates this after sync) |
+| `cognito_issuer_uri` | GH var `VITE_COGNITO_AUTHORITY` **and** Helm `auth.issuerUri` (`values-dev.yaml`) |
+| `cognito_spa_client_id` | GitHub Actions **variable** `VITE_COGNITO_CLIENT_ID` |
+| `cognito_user_pool_id` | used by the Cognito-user admin commands (runbook step 5) |
+| `rds_endpoint` | `deploy/helm/digishield/values-<env>.yaml` → `database.url` |
+| `redis_endpoint` | `values-<env>.yaml` → `redis.host` |
+| `external_secrets_irsa_role_arn` | consumed by `bootstrap-addons.sh` (ESO SA annotation) |
+| `lb_controller_role_arn` | consumed by `bootstrap-addons.sh` (LBC SA annotation) |
+| `nlb_eip_allocation_ids` / `public_subnet_ids` | consumed by `bootstrap-addons.sh` (NLB binding) |
+| `secrets_manager_prefix` | matches Helm `externalSecrets.remotePrefix` (`digishield/<env>`) |
 | `frontend_url` | public SPA URL (custom domain if set, else `*.cloudfront.net`) |
 
+Also set the API base path: GH var `VITE_API_BASE_URL=/api/v1` (same-origin).
 `frontend_bucket` / `frontend_distribution_id` should be set as **per-Environment**
 variables (`dev` / `production`), since each env has its own bucket and
-distribution. Optionally set `VITE_API_BASE_URL` (defaults to `/api/v1`).
+distribution.
 
 The app image lives in **GHCR** (`ghcr.io/<owner>/digishield/app`), not ECR.
 Since the package is private, add a GitHub Actions **secret** `GHCR_PULL_TOKEN` =
@@ -140,54 +164,43 @@ on top of the `production` GitHub Environment's required-reviewer approval. Leav
 `PROD_DEPLOY_ENABLED` unset to run dev only (prod incurs no cost); set it to
 `true` **and** approve the gate when you actually want to ship production.
 
-## 6. Finish API routing (SPA -> backend, same-origin)
+## 6. API routing (SPA → backend, same-origin)
 
 The SPA calls the API same-origin via `VITE_API_BASE_URL=/api/v1`: CloudFront
-routes `/api/*` to the backend, so there is no CORS and one URL per env. Wiring,
-after the backend is deployed with `ingress.enabled=true`:
+routes `/api/*` to the backend, so there is no CORS and one URL per env. For dev
+this is **already wired** in `envs/dev.tfvars`:
 
-1. The Helm Ingress provisions an internet-facing ALB. Read its DNS:
-   `kubectl -n digishield-<env> get ingress digishield-api`.
-2. Put that DNS (or a Route53 record fronting it) into the Terraform var
-   **`backend_api_origin_domain`** (`envs/<env>.tfvars`) and re-apply — CloudFront
-   gains the `/api/*` behavior pointing at it. Use a custom ALB domain + ACM cert
-   for `backend_api_origin_protocol_policy = "https-only"` (the default).
+- `backend_api_origin_domain` = the ingress-nginx **NLB DNS name**.
+- `backend_api_origin_protocol_policy = "http-only"` — there is no ACM cert for
+  an `*.elb.amazonaws.com` name, and viewer→CloudFront stays HTTPS.
+
+The nginx ingress matches `/api` on **any** Host (`ingress.host=""`), so
+CloudFront's forwarded Host (the NLB name) routes correctly. Direct HTTPS on
+`digishield.duckdns.org` (TLS terminated at nginx) also works. If the NLB is
+recreated with a new DNS name, update `backend_api_origin_domain` and re-apply.
 
 Leave `backend_api_origin_domain` empty to skip the `/api/*` behavior; the SPA
-must then target a full cross-origin API URL (set GH Actions var
-`VITE_API_BASE_URL`) and the backend must send CORS headers.
-
-## ClusterSecretStore (part of step 3, after ESO is installed)
-
-```yaml
-apiVersion: external-secrets.io/v1beta1
-kind: ClusterSecretStore
-metadata:
-  name: aws-secretsmanager      # must match values externalSecrets.secretStoreRef.name
-spec:
-  provider:
-    aws:
-      service: SecretsManager
-      region: <AWS_REGION>
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: external-secrets
-            namespace: external-secrets
-```
+must then target a full cross-origin API URL and the backend must send CORS
+headers.
 
 ## Teardown — destroy dev to stop cost
 
 Infra is codified, so the cheapest "pause" is to destroy dev and re-`apply`
-later. Use the helper (it shows the destroy plan, asks for confirmation, empties
-the S3 bucket that has no `force_destroy`, then destroys):
+later. **Delete the NLB-creating add-ons FIRST** so the LB Controller removes the
+NLB and frees the ENIs/EIPs before the VPC is destroyed:
 
 ```bash
+helm -n ingress-nginx uninstall ingress-nginx   # LBC deletes the NLB
+helm -n digishield-dev uninstall digishield
+aws s3 rm s3://$(terraform -chdir=infra/terraform output -raw frontend_bucket) --recursive
+
 cd infra/terraform
 ./destroy-dev.sh        # prompts: type "destroy dev" to confirm
 ```
 
-Or manually:
+`destroy-dev.sh` shows the destroy plan, asks for confirmation, empties the S3
+bucket that has no `force_destroy`, then destroys. The EIPs are Terraform-managed,
+so `destroy` releases them. Or manually:
 
 ```bash
 terraform plan -destroy -var-file=envs/dev.tfvars   # review first
@@ -211,4 +224,5 @@ Notes:
 - Dev sets `create_github_oidc_provider` = true, so destroying dev also removes
   the shared OIDC provider — fine while prod doesn't exist; do **not** destroy
   dev once prod references it.
-- Recreate anytime: `terraform apply -var-file=envs/dev.tfvars`.
+- Recreate anytime: `terraform apply -var-file=envs/dev.tfvars` then re-run
+  `bootstrap-addons.sh`.
