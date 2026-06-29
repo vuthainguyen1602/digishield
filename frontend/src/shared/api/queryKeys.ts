@@ -26,6 +26,7 @@ export const queryKeys = {
   groups: ['tenancy', 'groups'] as const,
   // Tenancy (admin org settings)
   tenantSettings: (tenantId: string) => ['tenancy', 'settings', tenantId] as const,
+  businessThresholds: (tenantId: string) => ['tenancy', 'thresholds', tenantId] as const,
   featureFlags: (tenantId: string) => ['tenancy', 'feature-flags', tenantId] as const,
   // Gamification (admin)
   leaderboard: ['gamification', 'leaderboard'] as const,

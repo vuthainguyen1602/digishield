@@ -60,8 +60,9 @@ Repo already wires **Cognito** (`feat/cognito-login`); confirm which path each e
       audience group, and `Group` carries no member count.
 - [x] `admin` AIDA run history — `runOrchestration` now persists an `AidaRun`;
       added `GET /ai/orchestration/runs` + `AidaPage` loads it and triggers real runs
-- [ ] Static reference data still needing GET endpoints: `admin` org-settings
-      thresholds, gamification point rules
+- [x] `admin` org-settings thresholds — added GET/PATCH `/tenants/{id}/thresholds`
+      (new `business_thresholds` table); sliders load + save the real values
+- [ ] Static reference data still needing GET endpoints: gamification point rules
 - [ ] `shared/.../TenantFilter.java` (L55) — read the `tid` claim from the JWT
       (currently falls back to a header) when the resource-server is integrated
 

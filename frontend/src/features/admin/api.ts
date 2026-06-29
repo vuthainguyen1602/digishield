@@ -151,6 +151,57 @@ export function useUserPoints(userId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Business thresholds (org-settings) — tenancy module
+// ---------------------------------------------------------------------------
+
+/** Mirrors `BusinessThresholdsView` (snake_case wire shape). */
+export interface BusinessThresholds {
+  risk_alert_score: number;
+  pass_score_pct: number;
+  min_campaigns_per_quarter: number;
+}
+
+/** GET /tenants/{id}/thresholds — the tenant's business thresholds. */
+export function fetchThresholds(tenantId: string, signal?: AbortSignal): Promise<BusinessThresholds> {
+  return apiRequest<BusinessThresholds>({
+    url: `/tenants/${tenantId}/thresholds`,
+    method: 'GET',
+    ...(signal ? { signal } : {}),
+  });
+}
+
+/** PATCH /tenants/{id}/thresholds — update the tenant's business thresholds. */
+export function patchThresholds(
+  tenantId: string,
+  body: BusinessThresholds,
+): Promise<BusinessThresholds> {
+  return apiRequest<BusinessThresholds>({
+    url: `/tenants/${tenantId}/thresholds`,
+    method: 'PATCH',
+    data: body,
+  });
+}
+
+/** Query hook for the business thresholds shown in {@link OrgSettingsPage}. */
+export function useBusinessThresholds(tenantId: string = DEMO_TENANT_ID) {
+  return useQuery({
+    queryKey: queryKeys.businessThresholds(tenantId),
+    queryFn: ({ signal }) => fetchThresholds(tenantId, signal),
+  });
+}
+
+/** Mutation hook to save the business thresholds; refreshes the query on success. */
+export function useUpdateThresholds(tenantId: string = DEMO_TENANT_ID) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BusinessThresholds) => patchThresholds(tenantId, body),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.businessThresholds(tenantId), data);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // AIDA / AI orchestration — ai + interception modules
 // ---------------------------------------------------------------------------
 
