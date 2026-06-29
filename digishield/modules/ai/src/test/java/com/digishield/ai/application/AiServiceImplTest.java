@@ -1,8 +1,6 @@
 package com.digishield.ai.application;
 
 import com.digishield.ai.api.dto.AidaRunView;
-import com.digishield.ai.api.dto.ClassificationView;
-import com.digishield.ai.api.dto.ModerationView;
 import com.digishield.ai.api.dto.SimTemplateView;
 import com.digishield.ai.domain.AidaRun;
 import com.digishield.ai.domain.AiTemplate;
@@ -47,6 +45,9 @@ class AiServiceImplTest {
     @Mock
     private AidaRunRepository aidaRunRepository;
 
+    @Mock
+    private AiClient aiClient;
+
     @InjectMocks
     private AiServiceImpl aiService;
 
@@ -61,20 +62,21 @@ class AiServiceImplTest {
     }
 
     @Test
-    void generateTemplate_persistsDraftAndReturnsSimTemplateShape() {
-        // Arrange
+    void generateTemplate_persistsClientOutputAsDraftAndReturnsView() {
+        // Arrange: the AI client produces the content; the service persists it
+        when(aiClient.generate(TemplateChannel.EMAIL, "banking", "summer"))
+                .thenReturn(new GeneratedTemplate("[banking] Cảnh báo", "tmpl/email/banking", Difficulty.MEDIUM));
         when(templateRepository.save(any(AiTemplate.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Act
         SimTemplateView view = aiService.generateTemplate(TemplateChannel.EMAIL, "banking", "summer");
 
-        // Assert
-        assertThat(view).isNotNull();
+        // Assert: persisted as a lowercase-mapped DRAFT view
         assertThat(view.id()).isNotNull();
         assertThat(view.channel()).isEqualTo("email");
-        assertThat(view.subject()).contains("banking");
-        assertThat(view.bodyRef()).isNotBlank();
-        assertThat(view.difficulty()).isIn("easy", "medium", "hard");
+        assertThat(view.subject()).isEqualTo("[banking] Cảnh báo");
+        assertThat(view.bodyRef()).isEqualTo("tmpl/email/banking");
+        assertThat(view.difficulty()).isEqualTo("medium");
         assertThat(view.status()).isEqualTo("draft");
         verify(templateRepository).save(any(AiTemplate.class));
     }
@@ -100,43 +102,12 @@ class AiServiceImplTest {
     }
 
     @Test
-    void classify_flagsThreatSignals() {
-        // Act
-        ClassificationView result = aiService.classify("Please verify your account and enter your password");
+    void classify_delegatesToAiClient() {
+        // Arrange
+        when(aiClient.classify("x")).thenReturn(new com.digishield.ai.api.dto.ClassificationView("threat", 0.8, "r"));
 
-        // Assert
-        assertThat(result.label()).isEqualTo("threat");
-        assertThat(result.confidence()).isBetween(0.0, 1.0);
-        assertThat(result.reason()).isNotBlank();
-    }
-
-    @Test
-    void classify_returnsCleanForBenignContent() {
-        // Act
-        ClassificationView result = aiService.classify("Hello, see you at the team lunch tomorrow.");
-
-        // Assert
-        assertThat(result.label()).isEqualTo("clean");
-    }
-
-    @Test
-    void moderate_passesSafeContent() {
-        // Act
-        ModerationView result = aiService.moderate("hello world");
-
-        // Assert
-        assertThat(result.verdict()).isEqualTo("pass");
-        assertThat(result.reasons()).isEmpty();
-    }
-
-    @Test
-    void moderate_blocksContentWithMultipleUnsafeWords() {
-        // Act
-        ModerationView result = aiService.moderate("this ransomware can exploit your system");
-
-        // Assert
-        assertThat(result.verdict()).isEqualTo("block");
-        assertThat(result.reasons()).hasSizeGreaterThanOrEqualTo(2);
+        // Act + Assert
+        assertThat(aiService.classify("x").label()).isEqualTo("threat");
     }
 
     @Test

@@ -11,14 +11,18 @@ Legend: 🔴 core gap · 🟡 integration/mock · 🟢 cleanup · ✅ done
 
 ## 🔴 High priority — core product not running for real
 
-### AI module — fully stubbed (`modules/ai/.../AiServiceImpl.java`)
-Deterministic, dependency-free stubs; every real model call is a TODO.
-- [ ] `classify()` (L79) — replace keyword matching with a real classification model
-- [ ] `generateTemplate()` (L58) — call an LLM provider instead of hardcoded templates
-- [ ] `moderate()` (L102) — call a content-safety service instead of a word-list rule
-- [ ] `runOrchestration()` (L125) — trigger the real AIDA risk pipeline (currently no-op)
-
-> When implementing, use the latest Claude models (Opus 4.8 / Sonnet 4.6).
+### AI module — Claude integration (gated)
+Behaviour moved behind an `AiClient` SPI: `StubAiClient` (deterministic default,
+no token cost) and `ClaudeAiClient` (`@Primary`, active when
+`digishield.ai.claude.enabled=true` + `ANTHROPIC_API_KEY`).
+- [x] `classify()` — Claude Haiku 4.5 with strict-JSON output (`{label,confidence,reason}`)
+- [x] `moderate()` — Claude Haiku 4.5 (`{verdict,reasons[]}`)
+- [x] `generateTemplate()` — Claude Sonnet 4.6 generates the subject + difficulty
+- [~] `runOrchestration()` — persists an `AidaRun` (history) but the real risk
+      recompute → auto-enroll pipeline is still a deterministic stub
+- [ ] Go-live (ops): set `AI_CLAUDE_ENABLED=true` + provide `ANTHROPIC_API_KEY`
+      (e.g. via Secrets Manager / GH secret). `generateTemplate` only stores the
+      subject (schema has no body column).
 
 ### Analytics — risk score & adaptive loop
 - [x] `computeScore()` — was a placeholder returning `0`; now signal-based (sim-click history)

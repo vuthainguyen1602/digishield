@@ -65,6 +65,11 @@ digishield:
       from: ${NOTIFICATIONS_EMAIL_FROM:no-reply@digishield.duckdns.org}
       ses:
         enabled: ${NOTIFICATIONS_SES_ENABLED:false}
+  # AI: off by default → deterministic StubAiClient (no token cost). Set true and
+  # provide ANTHROPIC_API_KEY to route classify/moderate/generate through Claude.
+  ai:
+    claude:
+      enabled: ${AI_CLAUDE_ENABLED:false}
 
 ---
 # API run mode
