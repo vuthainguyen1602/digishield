@@ -1,7 +1,13 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, PenLine } from 'lucide-react';
 import { Drawer, useToast } from '@/shared/ui';
-import { usePhishingReports, type PhishingReport } from './api';
+import {
+  usePhishingReports,
+  useTriageReport,
+  useConvertReportToTraining,
+  type PhishingReport,
+  type TriageDecision,
+} from './api';
 
 /**
  * SocInboxPage — SOC analyst triage queue (`/soc/inbox`).
@@ -63,9 +69,18 @@ function confColor(label: AiLabel): string {
   return 'var(--teal)';
 }
 
+/** Bulk-action button labels → the triage decision they map to. */
+const BULK_DECISIONS: Record<string, TriageDecision> = {
+  'Xác nhận đe dọa': 'confirm_threat',
+  'Đánh dấu sạch': 'dismiss',
+  'Cách ly': 'quarantine',
+};
+
 export default function SocInboxPage() {
   const toast = useToast();
   const { data, isLoading, isError, refetch } = usePhishingReports();
+  const triage = useTriageReport();
+  const convertToTraining = useConvertReportToTraining();
 
   const reports = useMemo<Report[]>(() => (data ?? []).map(toReport), [data]);
 
@@ -95,15 +110,26 @@ export default function SocInboxPage() {
   }
 
   function bulkAction(label: string) {
-    // TODO: replace with generated triage mutations from @/api/generated.
+    const decision = BULK_DECISIONS[label];
+    if (!decision || selected.length === 0) return;
+    selected.forEach((id) => triage.mutate({ id, decision }));
     toast(`${label}: ${selected.length} báo cáo`);
     setSelected([]);
   }
 
   function drawerAction(label: string) {
-    // TODO: replace with generated triage mutation from @/api/generated.
-    toast(label);
+    const report = activeReport;
     setOpenId(null);
+    if (!report) return;
+    const onSuccess = () => toast(label);
+    const onError = () => toast('Thao tác thất bại, thử lại');
+    if (label.startsWith('ThreatFlip')) {
+      convertToTraining.mutate(report.id, { onSuccess, onError });
+    } else if (label.includes('blacklist')) {
+      triage.mutate({ id: report.id, decision: 'confirm_threat', addToBlacklist: true }, { onSuccess, onError });
+    } else {
+      triage.mutate({ id: report.id, decision: 'confirm_threat' }, { onSuccess, onError });
+    }
   }
 
   const tabs: { id: Tab; label: string; count: number; threatStyle?: boolean }[] = [

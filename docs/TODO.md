@@ -43,9 +43,10 @@ Repo already wires **Cognito** (`feat/cognito-login`); confirm which path each e
 
 ## 🟡 Medium priority — frontend wired to mock / missing endpoints
 
-- [ ] `soc/ThreatIntelPage.tsx` (L29) — replace `MOCK_ROWS` with `useThreatIntel()`
-- [ ] `soc/InterventionLogPage.tsx` (L38) — replace `MOCK_ROWS`; wire CSV export (L64)
-- [ ] `soc/SocInboxPage.tsx` (L98,104) — wire bulk-triage mutations
+- [x] `soc/ThreatIntelPage.tsx` — live `useThreatIntel()` + ThreatFlip via `useConvertThreatIntel()`
+- [x] `soc/InterventionLogPage.tsx` — live `useInterventions()`; CSV export (client-side from loaded rows)
+- [x] `soc/SocInboxPage.tsx` — bulk + drawer triage wired via `useTriageReport()` /
+      `useConvertReportToTraining()`
 - [ ] `learning/LearnerPortalPage.tsx` (L203) — wire the report-phishing flow
 - [ ] `certificates/CertificatePage.tsx` (L242) — wire Download PDF / Share
 - [ ] `_shared/mockData.ts` — remove once the pages above use generated hooks

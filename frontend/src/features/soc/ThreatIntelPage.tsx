@@ -1,15 +1,19 @@
+import { useMemo } from 'react';
 import { Button, useToast } from '@/shared/ui';
+import { useThreatIntel, useConvertThreatIntel, type ThreatIntel } from './api';
 
 /**
  * ThreatIntelPage — threat intelligence feed (`/soc/threat-intel`).
  *
- * Design-consistent placeholder following the prototype: a table of incoming
- * threats with source, status badge, detection date and a ThreatFlip action.
+ * A table of incoming threats with source, status badge, detection date and a
+ * ThreatFlip action that turns an item into a coaching lesson.
  *
- * TODO: replace MOCK data with generated useThreatIntel() hook from @/api/generated.
+ * Data comes from the live backend via `useThreatIntel()` (`GET /threat-intel`);
+ * the ThreatFlip action calls `useConvertThreatIntel()`
+ * (`POST /threat-intel/{id}/convert`). Loading/error/empty states handled below.
  */
 
-type TiStatus = 'flipped' | 'pending' | 'new';
+type TiStatus = 'flipped' | 'new';
 
 interface ThreatRow {
   id: string;
@@ -22,21 +26,45 @@ interface ThreatRow {
 
 const STATUS_BADGE: Record<TiStatus, { label: string; bg: string; color: string }> = {
   flipped: { label: 'Đã chuyển bài học', bg: '#DDF3E6', color: '#0F7A4A' },
-  pending: { label: 'Chờ duyệt', bg: '#FCEBCF', color: '#C0720A' },
   new: { label: 'Mới nhận', bg: 'rgba(105,120,143,.12)', color: '#69788F' },
 };
 
-// TODO: replace with generated useThreatIntel() hook from @/api/generated.
-const MOCK_ROWS: ThreatRow[] = [
-  { id: 't1', title: 'Chiến dịch SMS giả Brandname VCB', meta: 'SMS · Smishing · Tín dụng', source: 'NCSC', status: 'flipped', detectedAt: '25/06/2026' },
-  { id: 't2', title: 'Deepfake giả giọng giám đốc chuyển tiền', meta: 'Vishing · Deepfake audio', source: 'User report', status: 'pending', detectedAt: '27/06/2026' },
-  { id: 't3', title: 'QR code giả tại cây ATM', meta: 'Quishing · Thực địa', source: 'A05 · CQCS', status: 'new', detectedAt: '27/06/2026' },
-];
+/** Format an ISO timestamp as dd/mm/yyyy; falls back to em dash. */
+function formatDate(iso: string | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('vi-VN');
+}
+
+/** Map a backend `ThreatIntel` record onto the table view model. */
+function toRow(dto: ThreatIntel, idx: number): ThreatRow {
+  const payload = (dto.raw_payload ?? '').trim();
+  return {
+    id: dto.id ?? `ti-${idx}`,
+    title: payload.length > 0 ? payload.slice(0, 120) : 'Mối đe dọa chưa có mô tả',
+    meta: dto.source ? `Nguồn: ${dto.source}` : 'Threat intel',
+    source: dto.source ?? '—',
+    status: dto.converted_template_id ? 'flipped' : 'new',
+    detectedAt: formatDate(dto.collected_at),
+  };
+}
 
 const GRID = '1fr 100px 120px 120px 100px';
 
 export default function ThreatIntelPage() {
   const toast = useToast();
+  const { data, isLoading, isError, refetch } = useThreatIntel();
+  const convert = useConvertThreatIntel();
+
+  const rows = useMemo<ThreatRow[]>(() => (data ?? []).map(toRow), [data]);
+
+  function onThreatFlip(id: string) {
+    convert.mutate(id, {
+      onSuccess: () => toast('ThreatFlip đã tạo bài học'),
+      onError: () => toast('ThreatFlip thất bại, thử lại'),
+    });
+  }
 
   return (
     <div style={{ animation: 'fadeUp .3s ease' }}>
@@ -72,9 +100,24 @@ export default function ThreatIntelPage() {
             <div />
           </div>
 
-          {MOCK_ROWS.map((r, idx) => {
+          {isLoading && <TableMessage>Đang tải threat intel…</TableMessage>}
+          {!isLoading && isError && (
+            <TableMessage>
+              Không tải được dữ liệu.{' '}
+              <button type="button" onClick={() => refetch()} style={inlineRetry}>
+                Thử lại
+              </button>
+            </TableMessage>
+          )}
+          {!isLoading && !isError && rows.length === 0 && (
+            <TableMessage>Chưa có threat intel nào.</TableMessage>
+          )}
+
+          {!isLoading &&
+            !isError &&
+            rows.map((r, idx) => {
             const badge = STATUS_BADGE[r.status];
-            const last = idx === MOCK_ROWS.length - 1;
+            const last = idx === rows.length - 1;
             return (
               <div
                 key={r.id}
@@ -118,7 +161,13 @@ export default function ThreatIntelPage() {
                       Xem bài
                     </button>
                   ) : (
-                    <Button type="button" variant="primary" size="sm" onClick={() => toast('ThreatFlip đã tạo bài học')}>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      disabled={convert.isPending}
+                      onClick={() => onThreatFlip(r.id)}
+                    >
                       ThreatFlip
                     </Button>
                   )}
@@ -130,6 +179,21 @@ export default function ThreatIntelPage() {
     </div>
   );
 }
+
+function TableMessage({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 13, color: 'var(--muted)' }}>
+      {children}
+    </div>
+  );
+}
+
+const inlineRetry: React.CSSProperties = {
+  all: 'unset',
+  color: 'var(--blue)',
+  cursor: 'pointer',
+  fontWeight: 600,
+};
 
 const pageTitle: React.CSSProperties = {
   fontFamily: "'Space Grotesk', system-ui",
