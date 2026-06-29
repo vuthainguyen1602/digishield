@@ -1,13 +1,16 @@
 package com.digishield.ai.application;
 
 import com.digishield.ai.api.AiService;
+import com.digishield.ai.api.dto.AidaRunView;
 import com.digishield.ai.api.dto.ClassificationView;
 import com.digishield.ai.api.dto.ModerationView;
 import com.digishield.ai.api.dto.SimTemplateView;
+import com.digishield.ai.domain.AidaRun;
 import com.digishield.ai.domain.AiTemplate;
 import com.digishield.ai.domain.Difficulty;
 import com.digishield.ai.domain.TemplateChannel;
 import com.digishield.ai.domain.TemplateStatus;
+import com.digishield.ai.infrastructure.AidaRunRepository;
 import com.digishield.ai.infrastructure.AiTemplateRepository;
 import com.digishield.shared.tenantcontext.TenantContext;
 import org.slf4j.Logger;
@@ -15,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -48,9 +52,11 @@ public class AiServiceImpl implements AiService {
             "sale", "discount", "free", "winner", "unsubscribe", "promotion", "%");
 
     private final AiTemplateRepository templateRepository;
+    private final AidaRunRepository aidaRunRepository;
 
-    public AiServiceImpl(AiTemplateRepository templateRepository) {
+    public AiServiceImpl(AiTemplateRepository templateRepository, AidaRunRepository aidaRunRepository) {
         this.templateRepository = templateRepository;
+        this.aidaRunRepository = aidaRunRepository;
     }
 
     @Override
@@ -131,12 +137,32 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public void runOrchestration(String scope, UUID scopeId) {
-        // TODO: trigger the AIDA pipeline (recompute risk scores -> auto-enroll
-        //       at-risk users into remediation). In dev this is a logged no-op.
+        // TODO: trigger the real AIDA pipeline (recompute risk scores -> auto-enroll
+        //       at-risk users into remediation). For now we record the run so the
+        //       admin console shows history; the summary is a deterministic stub.
         UUID tenantId = TenantContext.requireUuid();
         String safeScope = (scope == null || scope.isBlank()) ? "org" : scope.trim();
-        LOG.info("AIDA orchestration requested for tenant={} scope={} scopeId={} (dev no-op)",
+        String summary = "Đã xếp lịch tính lại rủi ro và tự động đăng ký cho phạm vi \""
+                + safeScope + "\" (bản demo).";
+        aidaRunRepository.save(new AidaRun(
+                UUID.randomUUID(), tenantId, safeScope, scopeId, "success", summary, Instant.now()));
+        LOG.info("AIDA orchestration recorded for tenant={} scope={} scopeId={}",
                 tenantId, safeScope, scopeId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AidaRunView> listRuns() {
+        UUID tenantId = TenantContext.requireUuid();
+        return aidaRunRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
+                .map(this::toRunView)
+                .toList();
+    }
+
+    private AidaRunView toRunView(AidaRun r) {
+        return new AidaRunView(
+                r.getId(), r.getScope(), r.getScopeId(),
+                r.getStatus(), r.getSummary(), r.getCreatedAt());
     }
 
     private SimTemplateView toView(AiTemplate t) {

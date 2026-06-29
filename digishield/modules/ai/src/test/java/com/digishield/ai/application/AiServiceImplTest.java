@@ -1,18 +1,22 @@
 package com.digishield.ai.application;
 
+import com.digishield.ai.api.dto.AidaRunView;
 import com.digishield.ai.api.dto.ClassificationView;
 import com.digishield.ai.api.dto.ModerationView;
 import com.digishield.ai.api.dto.SimTemplateView;
+import com.digishield.ai.domain.AidaRun;
 import com.digishield.ai.domain.AiTemplate;
 import com.digishield.ai.domain.Difficulty;
 import com.digishield.ai.domain.TemplateChannel;
 import com.digishield.ai.domain.TemplateStatus;
+import com.digishield.ai.infrastructure.AidaRunRepository;
 import com.digishield.ai.infrastructure.AiTemplateRepository;
 import com.digishield.shared.tenantcontext.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -39,6 +43,9 @@ class AiServiceImplTest {
 
     @Mock
     private AiTemplateRepository templateRepository;
+
+    @Mock
+    private AidaRunRepository aidaRunRepository;
 
     @InjectMocks
     private AiServiceImpl aiService;
@@ -133,11 +140,43 @@ class AiServiceImplTest {
     }
 
     @Test
-    void runOrchestration_isANoOpThatDoesNotTouchRepository() {
+    void runOrchestration_recordsARunAndLeavesTemplatesUntouched() {
+        // Arrange
+        UUID scopeId = UUID.randomUUID();
+        ArgumentCaptor<AidaRun> runCaptor = ArgumentCaptor.forClass(AidaRun.class);
+
         // Act
-        aiService.runOrchestration("org", UUID.randomUUID());
+        aiService.runOrchestration("org", scopeId);
+
+        // Assert: a successful run is recorded for the tenant/scope...
+        verify(aidaRunRepository).save(runCaptor.capture());
+        AidaRun saved = runCaptor.getValue();
+        assertThat(saved.getTenantId()).isEqualTo(TENANT_ID);
+        assertThat(saved.getScope()).isEqualTo("org");
+        assertThat(saved.getScopeId()).isEqualTo(scopeId);
+        assertThat(saved.getStatus()).isEqualTo("success");
+        assertThat(saved.getSummary()).isNotBlank();
+        assertThat(saved.getCreatedAt()).isNotNull();
+        // ...and the template library is not touched.
+        verifyNoInteractions(templateRepository);
+    }
+
+    @Test
+    void listRuns_returnsTenantRunsAsViews() {
+        // Arrange
+        AidaRun run = new AidaRun(
+                UUID.randomUUID(), TENANT_ID, "Phòng Kế toán", null, "success",
+                "34 người được cập nhật lộ trình học.", java.time.Instant.now());
+        when(aidaRunRepository.findByTenantIdOrderByCreatedAtDesc(TENANT_ID)).thenReturn(List.of(run));
+
+        // Act
+        List<AidaRunView> views = aiService.listRuns();
 
         // Assert
-        verifyNoInteractions(templateRepository);
+        assertThat(views).hasSize(1);
+        AidaRunView v = views.get(0);
+        assertThat(v.scope()).isEqualTo("Phòng Kế toán");
+        assertThat(v.status()).isEqualTo("success");
+        assertThat(v.summary()).contains("34 người");
     }
 }

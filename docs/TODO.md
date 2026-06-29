@@ -58,8 +58,10 @@ Repo already wires **Cognito** (`feat/cognito-login`); confirm which path each e
       `GET /groups`; the selected template id is now sent on create. Channels stay a
       fixed enum (UI choice, not data). Note: the create endpoint doesn't yet accept the
       audience group, and `Group` carries no member count.
-- [ ] Static reference data still needing GET endpoints: `admin` (thresholds, point
-      rules, run history)
+- [x] `admin` AIDA run history — `runOrchestration` now persists an `AidaRun`;
+      added `GET /ai/orchestration/runs` + `AidaPage` loads it and triggers real runs
+- [ ] Static reference data still needing GET endpoints: `admin` org-settings
+      thresholds, gamification point rules
 - [ ] `shared/.../TenantFilter.java` (L55) — read the `tid` claim from the JWT
       (currently falls back to a header) when the resource-server is integrated
 

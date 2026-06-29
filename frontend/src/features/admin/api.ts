@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/shared/api/client';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { DEMO_TENANT_ID } from '@/shared/api/tenant';
@@ -206,4 +206,60 @@ export function useClassify() {
 /** useMutation hook wrapping POST /interventions/evaluate. */
 export function useEvaluateIntervention() {
   return useMutation({ mutationFn: evaluateIntervention });
+}
+
+// ---------------------------------------------------------------------------
+// AIDA orchestration runs (history) — ai module
+// ---------------------------------------------------------------------------
+
+/** Mirrors `AidaRunView` (`GET /ai/orchestration/runs`). snake_case wire shape. */
+export interface AidaRun {
+  id: string;
+  scope: string;
+  scope_id?: string | null;
+  status: string;
+  summary?: string | null;
+  created_at?: string;
+}
+
+/** GET /ai/orchestration/runs — recent AIDA runs for the tenant, newest first. */
+export function fetchAidaRuns(signal?: AbortSignal): Promise<AidaRun[]> {
+  return apiRequest<AidaRun[]>({
+    url: '/ai/orchestration/runs',
+    method: 'GET',
+    ...(signal ? { signal } : {}),
+  });
+}
+
+/** TanStack Query hook powering the recent-runs panel in {@link AidaPage}. */
+export function useAidaRuns() {
+  return useQuery({
+    queryKey: queryKeys.aidaRuns,
+    queryFn: ({ signal }) => fetchAidaRuns(signal),
+  });
+}
+
+/** Body for `POST /ai/orchestration/run`. */
+export interface RunOrchestrationRequest {
+  scope: string;
+}
+
+/** POST /ai/orchestration/run — trigger AIDA and record the run. */
+export function runOrchestration(body: RunOrchestrationRequest): Promise<void> {
+  return apiRequest<void>({
+    url: '/ai/orchestration/run',
+    method: 'POST',
+    data: body,
+  });
+}
+
+/** Mutation hook for triggering AIDA; refreshes the runs panel on success. */
+export function useRunOrchestration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: runOrchestration,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.aidaRuns });
+    },
+  });
 }

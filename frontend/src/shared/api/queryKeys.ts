@@ -15,6 +15,7 @@ export const queryKeys = {
   certificate: (id: string) => ['learning', 'certificates', id] as const,
   blacklist: ['reports', 'blacklist'] as const,
   aiTemplates: ['ai', 'templates'] as const,
+  aidaRuns: ['ai', 'orchestration', 'runs'] as const,
   threatIntel: ['reports', 'threat-intel'] as const,
   interventions: ['interception', 'interventions'] as const,
   notifications: ['notifications'] as const,

@@ -1,18 +1,21 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button, Select, StatusPill } from '@/shared/ui';
-import { useClassify, useEvaluateIntervention } from './api';
+import {
+  useEvaluateIntervention,
+  useRunOrchestration,
+  useAidaRuns,
+  type AidaRun,
+} from './api';
 
 /**
  * AidaPage — AI Orchestration (Adaptive Intelligence Deployment Agent).
  * Pixel-matched to the design handoff "AIDA ORCHESTRATION" screen.
  *
- * There is no GET dashboard endpoint for AIDA. The interactive panels are wired
- * to the live backend via mutations:
- *  - "Chạy AIDA ngay" → POST /ai/classify (uses the selected scope/goal as the
- *    classification probe and surfaces the returned label).
+ * Wired to the live backend:
+ *  - "Chạy AIDA ngay" → POST /ai/orchestration/run (records a run; the panel
+ *    on the right refreshes to show it).
  *  - "Đánh giá can thiệp" → POST /interventions/evaluate (sample transaction).
- * The "recent runs" panel below stays static — the BE exposes no run-history
- * endpoint.
+ *  - Recent runs → GET /ai/orchestration/runs.
  */
 
 const cardStyle: React.CSSProperties = {
@@ -22,44 +25,52 @@ const cardStyle: React.CSSProperties = {
   padding: 24,
 };
 
-// Static run history — no BE endpoint exposes AIDA run history.
-const runs = [
-  {
-    id: 'run1',
-    when: 'Chạy 25/06/2026 08:00',
-    scope: 'Phạm vi: Toàn tổ chức · Mục tiêu: Hoàn thành bắt buộc',
-    result: '87 người được tự động đăng ký khóa học mới',
-  },
-  {
-    id: 'run2',
-    when: 'Chạy 10/06/2026 07:30',
-    scope: 'Phạm vi: Phòng Kế toán',
-    result: '34 người được cập nhật lộ trình học',
-  },
-];
+interface RunRow {
+  id: string;
+  when: string;
+  scope: string;
+  result: string;
+  ok: boolean;
+}
+
+/** Format an ISO timestamp as `Chạy dd/MM/yyyy HH:mm`. */
+function formatRunTime(iso: string | undefined): string {
+  if (!iso) return 'Chạy —';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Chạy —';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `Chạy ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Map a backend `AidaRun` onto the recent-runs row. */
+function toRunRow(dto: AidaRun): RunRow {
+  return {
+    id: dto.id,
+    when: formatRunTime(dto.created_at),
+    scope: `Phạm vi: ${dto.scope}`,
+    result: dto.summary ?? '—',
+    ok: dto.status === 'success',
+  };
+}
 
 const SCOPE_LABELS: Record<string, string> = {
   org: 'Toàn tổ chức',
   acc: 'Phòng Kế toán',
   risk: 'Nhóm Risk Score cao',
 };
-const GOAL_LABELS: Record<string, string> = {
-  reduce: 'Giảm Risk Score xuống dưới 50',
-  mandatory: 'Hoàn thành lộ trình bắt buộc',
-  prepare: 'Chuẩn bị cho chiến dịch mô phỏng',
-};
 
 export default function AidaPage() {
   const [scope, setScope] = useState('org');
   const [goal, setGoal] = useState('reduce');
 
-  const classify = useClassify();
+  const runOrch = useRunOrchestration();
   const evaluate = useEvaluateIntervention();
+  const runsQuery = useAidaRuns();
+
+  const runs = useMemo<RunRow[]>(() => (runsQuery.data ?? []).map(toRunRow), [runsQuery.data]);
 
   function runAida() {
-    classify.mutate({
-      content: `AIDA orchestration probe · Phạm vi: ${SCOPE_LABELS[scope] ?? scope} · Mục tiêu: ${GOAL_LABELS[goal] ?? goal}`,
-    });
+    runOrch.mutate({ scope: SCOPE_LABELS[scope] ?? scope });
   }
 
   function runEvaluate() {
@@ -115,17 +126,17 @@ export default function AidaPage() {
                 <option value="prepare">Chuẩn bị cho chiến dịch mô phỏng</option>
               </Select>
             </div>
-            <Button variant="primary" fullWidth onClick={runAida} disabled={classify.isPending}>
-              {classify.isPending ? 'Đang chạy AIDA…' : 'Chạy AIDA ngay'}
+            <Button variant="primary" fullWidth onClick={runAida} disabled={runOrch.isPending}>
+              {runOrch.isPending ? 'Đang chạy AIDA…' : 'Chạy AIDA ngay'}
             </Button>
 
-            {/* Classify result (live: POST /ai/classify) */}
-            {classify.isError && (
-              <ResultBox tone="error">Không gọi được AIDA. Vui lòng thử lại.</ResultBox>
+            {/* Orchestration result (live: POST /ai/orchestration/run) */}
+            {runOrch.isError && (
+              <ResultBox tone="error">Không chạy được AIDA. Vui lòng thử lại.</ResultBox>
             )}
-            {classify.data && (
+            {runOrch.isSuccess && (
               <ResultBox tone="info">
-                AIDA phân loại nội dung: <strong>{classify.data.label}</strong>
+                Đã chạy AIDA cho phạm vi <strong>{SCOPE_LABELS[scope] ?? scope}</strong>. Xem kết quả bên phải.
               </ResultBox>
             )}
 
@@ -155,6 +166,15 @@ export default function AidaPage() {
               Kết quả lần chạy gần nhất
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {(runsQuery.isLoading || runsQuery.isError || runs.length === 0) && (
+                <div style={{ fontSize: 12.5, color: 'var(--color-muted)', padding: '4px 2px' }}>
+                  {runsQuery.isLoading
+                    ? 'Đang tải lịch sử…'
+                    : runsQuery.isError
+                      ? 'Không tải được lịch sử chạy.'
+                      : 'Chưa có lần chạy nào. Bấm “Chạy AIDA ngay”.'}
+                </div>
+              )}
               {runs.map((r) => (
                 <div key={r.id} style={{ background: 'var(--color-bg)', borderRadius: 10, padding: 14 }}>
                   <div
@@ -166,8 +186,8 @@ export default function AidaPage() {
                     }}
                   >
                     <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text)' }}>{r.when}</span>
-                    <StatusPill variant="safe" dot={false}>
-                      Thành công
+                    <StatusPill variant={r.ok ? 'safe' : 'threat'} dot={false}>
+                      {r.ok ? 'Thành công' : 'Thất bại'}
                     </StatusPill>
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--color-muted)', marginBottom: 6 }}>{r.scope}</div>

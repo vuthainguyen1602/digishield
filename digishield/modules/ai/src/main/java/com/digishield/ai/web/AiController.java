@@ -1,6 +1,7 @@
 package com.digishield.ai.web;
 
 import com.digishield.ai.api.AiService;
+import com.digishield.ai.api.dto.AidaRunView;
 import com.digishield.ai.api.dto.ClassificationView;
 import com.digishield.ai.api.dto.ModerationView;
 import com.digishield.ai.api.dto.SimTemplateView;
@@ -75,6 +76,14 @@ public class AiController {
         UUID scopeId = request == null ? null : request.scopeId();
         aiService.runOrchestration(scope, scopeId);
         return ResponseEntity.status(HttpStatus.ACCEPTED).build();
+    }
+
+    /**
+     * Lists past AIDA orchestration runs for the recent-runs panel.
+     */
+    @GetMapping("/orchestration/runs")
+    public ResponseEntity<List<AidaRunView>> listRuns() {
+        return ResponseEntity.ok(aiService.listRuns());
     }
 
     /** DTO for template generation request. */
