@@ -7,14 +7,18 @@ import com.digishield.analytics.api.dto.RiskScoreDto;
 import com.digishield.analytics.domain.DepartmentRisk;
 import com.digishield.analytics.domain.RiskScope;
 import com.digishield.analytics.domain.RiskScore;
+import com.digishield.analytics.domain.RiskSignal;
+import com.digishield.analytics.domain.RiskSignalType;
 import com.digishield.analytics.infrastructure.DepartmentRiskRepository;
 import com.digishield.analytics.infrastructure.RiskScoreRepository;
+import com.digishield.analytics.infrastructure.RiskSignalRepository;
 import com.digishield.contracts.events.RiskRecomputedEvent;
 import com.digishield.shared.messaging.EventPublisher;
 import com.digishield.shared.tenantcontext.TenantContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -29,23 +33,45 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
     private static final double INDUSTRY_AVG_PHISH_PRONE_PCT = 11.2;
 
+    /** Baseline risk for a user with no recent negative signals. */
+    private static final int BASE_RISK = 5;
+    /** Upper bound for a risk score. */
+    private static final int MAX_RISK = 100;
+    /** Only signals from the last {@code SCORING_WINDOW} count toward the score. */
+    private static final Duration SCORING_WINDOW = Duration.ofDays(90);
+
     private final RiskScoreRepository riskScoreRepository;
     private final DepartmentRiskRepository departmentRiskRepository;
+    private final RiskSignalRepository riskSignalRepository;
     private final EventPublisher eventPublisher;
 
     public AnalyticsServiceImpl(RiskScoreRepository riskScoreRepository,
                                 DepartmentRiskRepository departmentRiskRepository,
+                                RiskSignalRepository riskSignalRepository,
                                 EventPublisher eventPublisher) {
         this.riskScoreRepository = riskScoreRepository;
         this.departmentRiskRepository = departmentRiskRepository;
+        this.riskSignalRepository = riskSignalRepository;
         this.eventPublisher = eventPublisher;
     }
 
     @Override
     public RiskScore recomputeRisk(UUID userId) {
-        UUID tenantId = TenantContext.requireUuid();
+        return doRecompute(TenantContext.requireUuid(), userId);
+    }
 
-        // Minimal body: the actual scoring logic would go here.
+    @Override
+    public RiskScore recordSimulationClick(UUID tenantId, UUID userId) {
+        RiskSignalType type = RiskSignalType.SIMULATION_CLICK;
+        riskSignalRepository.save(new RiskSignal(
+                UUID.randomUUID(), tenantId, userId, type, type.getDefaultWeight(), Instant.now()));
+        return doRecompute(tenantId, userId);
+    }
+
+    /**
+     * Computes, persists and announces a user's risk score for the given tenant.
+     */
+    private RiskScore doRecompute(UUID tenantId, UUID userId) {
         int value = computeScore(tenantId, userId);
 
         RiskScore score = new RiskScore(
@@ -168,9 +194,17 @@ public class AnalyticsServiceImpl implements AnalyticsService {
     }
 
     /**
-     * Placeholder for risk score computation. Returns a minimal value.
+     * Risk score for a user: a baseline plus the summed weight of their recent
+     * behavioural signals (e.g. simulation clicks), capped at {@link #MAX_RISK}.
+     * Higher means more phish-prone.
      */
     private int computeScore(UUID tenantId, UUID userId) {
-        return 0;
+        Instant since = Instant.now().minus(SCORING_WINDOW);
+        int signalWeight = riskSignalRepository
+                .findByTenantIdAndUserIdAndOccurredAtAfter(tenantId, userId, since)
+                .stream()
+                .mapToInt(RiskSignal::getWeight)
+                .sum();
+        return Math.min(MAX_RISK, BASE_RISK + signalWeight);
     }
 }
