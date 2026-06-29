@@ -23,10 +23,9 @@ Deterministic, dependency-free stubs; every real model call is a TODO.
 ### Analytics — risk score & adaptive loop
 - [x] `computeScore()` — was a placeholder returning `0`; now signal-based (sim-click history)
 - [x] Wire the simulation-click → risk-recompute trigger (new `SimulationClickRiskListener`)
-- [ ] `PhishingReportConfirmedListener` (L19) — still a no-op. Blocked: the event
-      `PhishingReportConfirmedEvent(tenantId, reportId)` carries **no userId**, so a
-      confirmed report can't be attributed to a user's risk. Add `userId` to the
-      event (reporting side) before wiring this.
+- [x] `PhishingReportConfirmedListener` — added `userId` to `PhishingReportConfirmedEvent`
+      (reporting side) and wired the listener: a confirmed report is now recorded as a
+      vigilant (risk-lowering) signal for the reporter and recomputes their score.
 - [ ] Dashboard trend/benchmark points are partly hardcoded (`AnalyticsServiceImpl` L114-134)
 
 ### Notification — saves to DB but never delivers

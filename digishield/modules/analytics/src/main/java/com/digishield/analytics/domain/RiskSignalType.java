@@ -7,8 +7,11 @@ package com.digishield.analytics.domain;
  */
 public enum RiskSignalType {
 
-    /** The user clicked a simulated phishing link. */
-    SIMULATION_CLICK(25);
+    /** The user clicked a simulated phishing link (risky → raises the score). */
+    SIMULATION_CLICK(25),
+
+    /** The user reported an email later confirmed as a real threat (vigilant → lowers the score). */
+    PHISHING_REPORT_CONFIRMED(-15);
 
     private final int defaultWeight;
 

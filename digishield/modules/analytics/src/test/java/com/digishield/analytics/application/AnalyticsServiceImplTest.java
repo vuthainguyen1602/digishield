@@ -164,6 +164,32 @@ class AnalyticsServiceImplTest {
         assertThat(result.getValue()).isEqualTo(30);
     }
 
+    @Test
+    void recordConfirmedReport_recordsVigilantSignalAndFloorsScoreAtZero() {
+        // Arrange: a single confirmed-report signal (weight -15) → 5 - 15 floored to 0
+        UUID userId = UUID.randomUUID();
+        RiskSignal reportSignal = new RiskSignal(
+                UUID.randomUUID(), TENANT_ID, userId, RiskSignalType.PHISHING_REPORT_CONFIRMED, -15, Instant.now());
+        when(riskSignalRepository
+                .findByTenantIdAndUserIdAndOccurredAtAfter(eq(TENANT_ID), eq(userId), any(Instant.class)))
+                .thenReturn(List.of(reportSignal));
+        when(riskScoreRepository.save(any(RiskScore.class))).thenAnswer(inv -> inv.getArgument(0));
+        TenantContext.clear(); // tenant comes from the argument, not the context
+
+        // Act
+        RiskScore result = analyticsService.recordConfirmedReport(TENANT_ID, userId);
+
+        // Assert: a PHISHING_REPORT_CONFIRMED signal was recorded with negative weight
+        ArgumentCaptor<RiskSignal> signalCaptor = ArgumentCaptor.forClass(RiskSignal.class);
+        verify(riskSignalRepository).save(signalCaptor.capture());
+        RiskSignal saved = signalCaptor.getValue();
+        assertThat(saved.getType()).isEqualTo(RiskSignalType.PHISHING_REPORT_CONFIRMED);
+        assertThat(saved.getWeight()).isEqualTo(-15);
+
+        // Assert: score never goes below zero
+        assertThat(result.getValue()).isZero();
+    }
+
     private RiskSignal signal(UUID userId) {
         return new RiskSignal(
                 UUID.randomUUID(), TENANT_ID, userId, RiskSignalType.SIMULATION_CLICK, 25, Instant.now());

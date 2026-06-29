@@ -98,8 +98,9 @@ class ReportingServiceImplTest {
     void triage_whenConfirmingThreat_marksConfirmedAndPublishesEvent() {
         // Arrange
         UUID reportId = UUID.randomUUID();
+        UUID reporterId = UUID.randomUUID();
         PhishingReport report = new PhishingReport(
-                reportId, TENANT_ID, UUID.randomUUID(), "payload",
+                reportId, TENANT_ID, reporterId, "payload",
                 null, 0.0, ReportStatus.SUBMITTED);
         when(reportRepository.findById(reportId)).thenReturn(Optional.of(report));
         when(reportRepository.save(any(PhishingReport.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -114,6 +115,7 @@ class ReportingServiceImplTest {
         verify(eventPublisher).publish(eventCaptor.capture());
         PhishingReportConfirmedEvent event = eventCaptor.getValue();
         assertThat(event.tenantId()).isEqualTo(TENANT_ID);
+        assertThat(event.userId()).isEqualTo(reporterId);
         assertThat(event.reportId()).isEqualTo(reportId);
     }
 

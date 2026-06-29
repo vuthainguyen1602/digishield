@@ -35,6 +35,8 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
     /** Baseline risk for a user with no recent negative signals. */
     private static final int BASE_RISK = 5;
+    /** Lower bound for a risk score. */
+    private static final int MIN_RISK = 0;
     /** Upper bound for a risk score. */
     private static final int MAX_RISK = 100;
     /** Only signals from the last {@code SCORING_WINDOW} count toward the score. */
@@ -62,7 +64,19 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
     @Override
     public RiskScore recordSimulationClick(UUID tenantId, UUID userId) {
-        RiskSignalType type = RiskSignalType.SIMULATION_CLICK;
+        return recordSignal(tenantId, userId, RiskSignalType.SIMULATION_CLICK);
+    }
+
+    @Override
+    public RiskScore recordConfirmedReport(UUID tenantId, UUID userId) {
+        return recordSignal(tenantId, userId, RiskSignalType.PHISHING_REPORT_CONFIRMED);
+    }
+
+    /**
+     * Persists a behavioural signal of the given type, then recomputes the
+     * user's risk score from their recent signals.
+     */
+    private RiskScore recordSignal(UUID tenantId, UUID userId, RiskSignalType type) {
         riskSignalRepository.save(new RiskSignal(
                 UUID.randomUUID(), tenantId, userId, type, type.getDefaultWeight(), Instant.now()));
         return doRecompute(tenantId, userId);
@@ -195,8 +209,10 @@ public class AnalyticsServiceImpl implements AnalyticsService {
 
     /**
      * Risk score for a user: a baseline plus the summed weight of their recent
-     * behavioural signals (e.g. simulation clicks), capped at {@link #MAX_RISK}.
-     * Higher means more phish-prone.
+     * behavioural signals, clamped to {@link #MIN_RISK}..{@link #MAX_RISK}.
+     * Risky actions (e.g. simulation clicks) carry positive weight; vigilant
+     * ones (e.g. confirmed phishing reports) carry negative weight. Higher means
+     * more phish-prone.
      */
     private int computeScore(UUID tenantId, UUID userId) {
         Instant since = Instant.now().minus(SCORING_WINDOW);
@@ -205,6 +221,6 @@ public class AnalyticsServiceImpl implements AnalyticsService {
                 .stream()
                 .mapToInt(RiskSignal::getWeight)
                 .sum();
-        return Math.min(MAX_RISK, BASE_RISK + signalWeight);
+        return Math.max(MIN_RISK, Math.min(MAX_RISK, BASE_RISK + signalWeight));
     }
 }
