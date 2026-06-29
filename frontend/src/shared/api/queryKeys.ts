@@ -30,6 +30,7 @@ export const queryKeys = {
   featureFlags: (tenantId: string) => ['tenancy', 'feature-flags', tenantId] as const,
   // Gamification (admin)
   leaderboard: ['gamification', 'leaderboard'] as const,
+  pointRules: ['gamification', 'point-rules'] as const,
   userBadges: (userId: string) => ['gamification', 'badges', userId] as const,
   userPoints: (userId: string) => ['gamification', 'points', userId] as const,
   // Super admin

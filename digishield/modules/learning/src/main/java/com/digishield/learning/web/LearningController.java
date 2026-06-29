@@ -11,6 +11,7 @@ import com.digishield.learning.api.ComplianceStatusView;
 import com.digishield.learning.api.CourseView;
 import com.digishield.learning.api.EnrollmentView;
 import com.digishield.learning.api.LeaderboardRowView;
+import com.digishield.learning.api.PointRuleView;
 import com.digishield.learning.api.LearningService;
 import com.digishield.learning.api.LessonView;
 import com.digishield.learning.api.PlacementResultView;
@@ -182,6 +183,12 @@ class LearningController {
         UUID tenantId = TenantContext.requireUuid();
         int total = learningService.getPoints(tenantId, id);
         return ResponseEntity.ok(Map.of("total", total, "entries", java.util.List.of()));
+    }
+
+    @GetMapping("/api/v1/gamification/point-rules")
+    ResponseEntity<java.util.List<PointRuleView>> pointRules() {
+        UUID tenantId = TenantContext.requireUuid();
+        return ResponseEntity.ok(learningService.listPointRules(tenantId));
     }
 
     // ---- Compliance --------------------------------------------------------

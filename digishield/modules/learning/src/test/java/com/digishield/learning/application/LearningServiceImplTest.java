@@ -6,8 +6,10 @@ import com.digishield.learning.domain.Course;
 import com.digishield.learning.domain.CourseLevel;
 import com.digishield.learning.domain.Enrollment;
 import com.digishield.learning.domain.EnrollmentStatus;
+import com.digishield.learning.domain.PointRule;
 import com.digishield.learning.infrastructure.CourseRepository;
 import com.digishield.learning.infrastructure.EnrollmentRepository;
+import com.digishield.learning.infrastructure.PointRuleRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -41,6 +43,9 @@ class LearningServiceImplTest {
 
     @Mock
     private EnrollmentRepository enrollmentRepository;
+
+    @Mock
+    private PointRuleRepository pointRuleRepository;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -145,5 +150,25 @@ class LearningServiceImplTest {
                 .isInstanceOf(IllegalStateException.class);
         verify(enrollmentRepository, never()).save(any());
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void listPointRules_mapsEntitiesToViews() {
+        // Arrange
+        PointRule report = new PointRule(
+                UUID.randomUUID(), TENANT_ID, "report_confirmed", "Báo cáo email lừa đảo đúng", 50);
+        PointRule click = new PointRule(
+                UUID.randomUUID(), TENANT_ID, "simulation_clicked", "Bấm link mô phỏng", -5);
+        when(pointRuleRepository.findByTenantIdOrderByPointsDesc(TENANT_ID))
+                .thenReturn(java.util.List.of(report, click));
+
+        // Act
+        var views = learningService.listPointRules(TENANT_ID);
+
+        // Assert
+        assertThat(views).hasSize(2);
+        assertThat(views.get(0).action()).isEqualTo("report_confirmed");
+        assertThat(views.get(0).points()).isEqualTo(50);
+        assertThat(views.get(1).points()).isEqualTo(-5);
     }
 }

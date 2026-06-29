@@ -151,6 +151,34 @@ export function useUserPoints(userId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Gamification point rules — learning module
+// ---------------------------------------------------------------------------
+
+/** Mirrors `PointRuleView` (`GET /gamification/point-rules`). */
+export interface PointRule {
+  action: string;
+  label: string;
+  points: number;
+}
+
+/** GET /gamification/point-rules — points awarded/deducted per action. */
+export function fetchPointRules(signal?: AbortSignal): Promise<PointRule[]> {
+  return apiRequest<PointRule[]>({
+    url: '/gamification/point-rules',
+    method: 'GET',
+    ...(signal ? { signal } : {}),
+  });
+}
+
+/** Query hook for the point-rules panel in {@link GamificationPage}. */
+export function usePointRules() {
+  return useQuery({
+    queryKey: queryKeys.pointRules,
+    queryFn: ({ signal }) => fetchPointRules(signal),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Business thresholds (org-settings) — tenancy module
 // ---------------------------------------------------------------------------
 

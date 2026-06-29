@@ -12,6 +12,7 @@ import com.digishield.learning.domain.Enrollment;
 import com.digishield.learning.domain.EnrollmentStatus;
 import com.digishield.learning.domain.GamificationProfile;
 import com.digishield.learning.domain.Lesson;
+import com.digishield.learning.domain.PointRule;
 import com.digishield.learning.domain.QuizQuestion;
 import com.digishield.learning.infrastructure.AssessmentRepository;
 import com.digishield.learning.infrastructure.BadgeRepository;
@@ -22,6 +23,7 @@ import com.digishield.learning.infrastructure.CourseRepository;
 import com.digishield.learning.infrastructure.EnrollmentRepository;
 import com.digishield.learning.infrastructure.GamificationProfileRepository;
 import com.digishield.learning.infrastructure.LessonRepository;
+import com.digishield.learning.infrastructure.PointRuleRepository;
 import com.digishield.learning.infrastructure.QuizQuestionRepository;
 import com.digishield.shared.tenantcontext.DemoTenants;
 import org.springframework.boot.CommandLineRunner;
@@ -60,6 +62,7 @@ class LearningDevSeeder implements CommandLineRunner {
     private final CompliancePolicyRepository compliancePolicyRepository;
     private final AssessmentRepository assessmentRepository;
     private final CoachingPageRepository coachingPageRepository;
+    private final PointRuleRepository pointRuleRepository;
 
     LearningDevSeeder(CourseRepository courseRepository,
                       LessonRepository lessonRepository,
@@ -70,7 +73,8 @@ class LearningDevSeeder implements CommandLineRunner {
                       GamificationProfileRepository gamificationProfileRepository,
                       CompliancePolicyRepository compliancePolicyRepository,
                       AssessmentRepository assessmentRepository,
-                      CoachingPageRepository coachingPageRepository) {
+                      CoachingPageRepository coachingPageRepository,
+                      PointRuleRepository pointRuleRepository) {
         this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
         this.quizQuestionRepository = quizQuestionRepository;
@@ -81,10 +85,26 @@ class LearningDevSeeder implements CommandLineRunner {
         this.compliancePolicyRepository = compliancePolicyRepository;
         this.assessmentRepository = assessmentRepository;
         this.coachingPageRepository = coachingPageRepository;
+        this.pointRuleRepository = pointRuleRepository;
+    }
+
+    private void seedPointRules() {
+        if (!pointRuleRepository.findByTenantIdOrderByPointsDesc(TENANT).isEmpty()) {
+            return;
+        }
+        pointRuleRepository.save(new PointRule(
+                UUID.randomUUID(), TENANT, "report_confirmed", "Báo cáo email lừa đảo đúng", 50));
+        pointRuleRepository.save(new PointRule(
+                UUID.randomUUID(), TENANT, "quiz_passed", "Đạt bài kiểm tra (>=70%)", 24));
+        pointRuleRepository.save(new PointRule(
+                UUID.randomUUID(), TENANT, "lesson_completed", "Hoàn thành bài học", 10));
+        pointRuleRepository.save(new PointRule(
+                UUID.randomUUID(), TENANT, "simulation_clicked", "Bấm link mô phỏng", -5));
     }
 
     @Override
     public void run(String... args) {
+        seedPointRules();
         if (!courseRepository.findByTenantId(TENANT).isEmpty()) {
             return; // idempotent
         }

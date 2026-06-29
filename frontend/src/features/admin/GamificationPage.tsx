@@ -1,16 +1,17 @@
 import { Button } from '@/shared/ui';
 import { Award, ShieldCheck, Target, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useLeaderboard, useUserBadges } from './api';
+import { useLeaderboard, useUserBadges, usePointRules, type PointRule } from './api';
 
 /**
  * GamificationPage — badge definitions, point rules, leaderboard scope.
  * Pixel-matched to the design handoff "GAMIFICATION" screen.
  *
  * Badges come from the live backend via `useUserBadges()`
- * (`GET /users/{id}/badges`) for the seeded demo learner, and the leaderboard
- * from `useLeaderboard()` (`GET /gamification/leaderboard`). Point rules stay
- * static (no BE endpoint). Loading/error/empty states handled below.
+ * (`GET /users/{id}/badges`) for the seeded demo learner, the leaderboard from
+ * `useLeaderboard()` (`GET /gamification/leaderboard`), and the point rules from
+ * `usePointRules()` (`GET /gamification/point-rules`). Loading/error/empty
+ * states handled below.
  */
 
 // Seeded demo learner (dev profile) — the user whose badges/points are shown.
@@ -28,12 +29,17 @@ function iconFor(ref: string | null): LucideIcon {
   return (ref && ICON_MAP[ref]) || ShieldCheck;
 }
 
-const pointRules = [
-  { label: 'Hoàn thành bài học', points: '+10đ', color: 'var(--color-blue)' },
-  { label: 'Đạt bài kiểm tra (>=70%)', points: '+24đ', color: 'var(--color-blue)' },
-  { label: 'Báo cáo email lừa đảo đúng', points: '+50đ', color: 'var(--color-teal)' },
-  { label: 'Bấm link mô phỏng', points: '-5đ', color: 'var(--color-red)' },
-];
+/** Signed points label, e.g. `+50đ` / `-5đ`. */
+function pointsLabel(points: number): string {
+  return `${points > 0 ? '+' : ''}${points}đ`;
+}
+
+/** Colour by sign/size: deduction → red, big reward → teal, otherwise blue. */
+function pointsColor(points: number): string {
+  if (points < 0) return 'var(--color-red)';
+  if (points >= 50) return 'var(--color-teal)';
+  return 'var(--color-blue)';
+}
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--color-surface)',
@@ -45,6 +51,8 @@ const cardStyle: React.CSSProperties = {
 export default function GamificationPage() {
   const badges = useUserBadges(DEMO_USER_ID);
   const leaderboard = useLeaderboard();
+  const pointRulesQuery = usePointRules();
+  const pointRules: PointRule[] = pointRulesQuery.data ?? [];
 
   return (
     <>
@@ -141,9 +149,18 @@ export default function GamificationPage() {
               Quy tắc điểm · Point Rules
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {(pointRulesQuery.isLoading || pointRulesQuery.isError || pointRules.length === 0) && (
+                <InlineMessage>
+                  {pointRulesQuery.isLoading
+                    ? 'Đang tải quy tắc điểm…'
+                    : pointRulesQuery.isError
+                      ? 'Không tải được quy tắc điểm.'
+                      : 'Chưa có quy tắc điểm nào.'}
+                </InlineMessage>
+              )}
               {pointRules.map((r) => (
                 <div
-                  key={r.label}
+                  key={r.action}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -159,10 +176,10 @@ export default function GamificationPage() {
                       fontFamily: "'JetBrains Mono', monospace",
                       fontSize: 14,
                       fontWeight: 700,
-                      color: r.color,
+                      color: pointsColor(r.points),
                     }}
                   >
-                    {r.points}
+                    {pointsLabel(r.points)}
                   </span>
                 </div>
               ))}
