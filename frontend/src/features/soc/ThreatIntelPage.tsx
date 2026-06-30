@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Button, useToast } from '@/shared/ui';
+import { useT } from '@/shared/i18n/I18nProvider';
 import { useThreatIntel, useConvertThreatIntel, type ThreatIntel } from './api';
 
 /**
@@ -38,12 +39,12 @@ function formatDate(iso: string | undefined): string {
 }
 
 /** Map a backend `ThreatIntel` record onto the table view model. */
-function toRow(dto: ThreatIntel, idx: number): ThreatRow {
+function toRow(dto: ThreatIntel, idx: number, t: (key: string, vars?: Record<string, string | number>) => string): ThreatRow {
   const payload = (dto.raw_payload ?? '').trim();
   return {
     id: dto.id ?? `ti-${idx}`,
-    title: payload.length > 0 ? payload.slice(0, 120) : 'Mối đe dọa chưa có mô tả',
-    meta: dto.source ? `Nguồn: ${dto.source}` : 'Threat intel',
+    title: payload.length > 0 ? payload.slice(0, 120) : t('Mối đe dọa chưa có mô tả'),
+    meta: dto.source ? t('Nguồn: {source}', { source: dto.source }) : 'Threat intel',
     source: dto.source ?? '—',
     status: dto.converted_template_id ? 'flipped' : 'new',
     detectedAt: formatDate(dto.collected_at),
@@ -53,16 +54,17 @@ function toRow(dto: ThreatIntel, idx: number): ThreatRow {
 const GRID = '1fr 100px 120px 120px 100px';
 
 export default function ThreatIntelPage() {
+  const t = useT();
   const toast = useToast();
   const { data, isLoading, isError, refetch } = useThreatIntel();
   const convert = useConvertThreatIntel();
 
-  const rows = useMemo<ThreatRow[]>(() => (data ?? []).map(toRow), [data]);
+  const rows = useMemo<ThreatRow[]>(() => (data ?? []).map((dto, idx) => toRow(dto, idx, t)), [data, t]);
 
   function onThreatFlip(id: string) {
     convert.mutate(id, {
-      onSuccess: () => toast('ThreatFlip đã tạo bài học'),
-      onError: () => toast('ThreatFlip thất bại, thử lại'),
+      onSuccess: () => toast(t('ThreatFlip đã tạo bài học')),
+      onError: () => toast(t('ThreatFlip thất bại, thử lại')),
     });
   }
 
@@ -71,7 +73,7 @@ export default function ThreatIntelPage() {
       <header style={{ marginBottom: 20 }}>
           <h1 style={pageTitle}>Threat Intelligence</h1>
           <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-            Nguồn tình báo mối đe dọa · ThreatFlip để biến thành bài học
+            {t('Nguồn tình báo mối đe dọa · ThreatFlip để biến thành bài học')}
           </p>
         </header>
 
@@ -92,7 +94,7 @@ export default function ThreatIntelPage() {
               background: 'var(--bg)',
             }}
           >
-            {['Mối đe dọa', 'Nguồn', 'Trạng thái', 'Phát hiện'].map((h) => (
+            {[t('Mối đe dọa'), t('Nguồn'), t('Trạng thái'), t('Phát hiện')].map((h) => (
               <div key={h} style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--muted)' }}>
                 {h}
               </div>
@@ -100,17 +102,17 @@ export default function ThreatIntelPage() {
             <div />
           </div>
 
-          {isLoading && <TableMessage>Đang tải threat intel…</TableMessage>}
+          {isLoading && <TableMessage>{t('Đang tải threat intel…')}</TableMessage>}
           {!isLoading && isError && (
             <TableMessage>
-              Không tải được dữ liệu.{' '}
+              {t('Không tải được dữ liệu.')}{' '}
               <button type="button" onClick={() => refetch()} style={inlineRetry}>
-                Thử lại
+                {t('Thử lại')}
               </button>
             </TableMessage>
           )}
           {!isLoading && !isError && rows.length === 0 && (
-            <TableMessage>Chưa có threat intel nào.</TableMessage>
+            <TableMessage>{t('Chưa có threat intel nào.')}</TableMessage>
           )}
 
           {!isLoading &&
@@ -147,7 +149,7 @@ export default function ThreatIntelPage() {
                       fontWeight: 600,
                     }}
                   >
-                    {badge.label}
+                    {t(badge.label)}
                   </span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>{r.detectedAt}</div>
@@ -155,10 +157,10 @@ export default function ThreatIntelPage() {
                   {r.status === 'flipped' ? (
                     <button
                       type="button"
-                      onClick={() => toast('Mở bài học')}
+                      onClick={() => toast(t('Mở bài học'))}
                       style={{ all: 'unset', fontSize: 12, color: 'var(--blue)', cursor: 'pointer' }}
                     >
-                      Xem bài
+                      {t('Xem bài')}
                     </button>
                   ) : (
                     <Button

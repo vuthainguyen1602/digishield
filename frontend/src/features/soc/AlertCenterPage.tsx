@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useToast } from '@/shared/ui';
 import { useNotifications, useBroadcastAlert, type Notification } from '@/features/notifications/api';
+import { useT } from '@/shared/i18n/I18nProvider';
 
 /**
  * AlertCenterPage — broadcast composer + history (`/soc/alerts`).
@@ -52,40 +53,41 @@ function formatAt(iso: string | null | undefined): string {
 }
 
 /** Map a backend `NotificationView` onto a history row. */
-function toRecord(n: Notification): BroadcastRecord {
+function toRecord(n: Notification, t: (s: string) => string): BroadcastRecord {
   const channel = n.channel ?? 'in_app';
   const status = n.status ?? '';
   return {
     id: n.id,
     severity: typeToSeverity(n.type),
     at: formatAt(n.scheduledAt),
-    message: n.title ?? n.body ?? '(không có nội dung)',
+    message: n.title ?? n.body ?? t('(không có nội dung)'),
     reach: [channel, status].filter(Boolean).join(' · '),
   };
 }
 
 export default function AlertCenterPage() {
+  const t = useT();
   const toast = useToast();
   const [severity, setSeverity] = useState<Severity>('CRITICAL');
   const [message, setMessage] = useState('');
   const { data, isLoading, isError, refetch } = useNotifications();
   const broadcastMut = useBroadcastAlert();
 
-  const history = (data ?? []).map(toRecord);
+  const history = (data ?? []).map((n) => toRecord(n, t));
 
   function broadcast() {
     if (!message.trim()) {
-      toast('Vui lòng nhập nội dung cảnh báo.');
+      toast(t('Vui lòng nhập nội dung cảnh báo.'));
       return;
     }
     broadcastMut.mutate(
       { message: message.trim(), severity: severity.toLowerCase() as 'info' | 'warning' | 'critical' },
       {
         onSuccess: (res) => {
-          toast(`Đã phát cảnh báo ${severity} tới ${res.reach} người.`);
+          toast(t('Đã phát cảnh báo {severity} tới {reach} người.', { severity, reach: res.reach }));
           setMessage('');
         },
-        onError: () => toast('Không phát được cảnh báo, thử lại.'),
+        onError: () => toast(t('Không phát được cảnh báo, thử lại.')),
       },
     );
   }
@@ -93,9 +95,9 @@ export default function AlertCenterPage() {
   return (
     <div style={{ animation: 'fadeUp .3s ease' }}>
       <header style={{ marginBottom: 20 }}>
-          <h1 style={pageTitle}>Trung tâm cảnh báo · Alert Center</h1>
+          <h1 style={pageTitle}>{t('Trung tâm cảnh báo · Alert Center')}</h1>
           <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-            Soạn và phát cảnh báo toàn tổ chức qua WebSocket
+            {t('Soạn và phát cảnh báo toàn tổ chức qua WebSocket')}
           </p>
         </header>
 
@@ -114,12 +116,12 @@ export default function AlertCenterPage() {
             }}
           >
             <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: '0 0 20px' }}>
-              Soạn cảnh báo mới
+              {t('Soạn cảnh báo mới')}
             </h2>
 
             <div style={{ marginBottom: 14 }}>
               <label htmlFor="alert-severity" style={fieldLabel}>
-                Mức độ
+                {t('Mức độ')}
               </label>
               <select
                 id="alert-severity"
@@ -129,7 +131,7 @@ export default function AlertCenterPage() {
               >
                 {SEVERITY_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
-                    {o.label}
+                    {t(o.label)}
                   </option>
                 ))}
               </select>
@@ -137,14 +139,14 @@ export default function AlertCenterPage() {
 
             <div style={{ marginBottom: 14 }}>
               <label htmlFor="alert-message" style={fieldLabel}>
-                Nội dung cảnh báo
+                {t('Nội dung cảnh báo')}
               </label>
               <textarea
                 id="alert-message"
                 rows={4}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Mô tả mối đe dọa, hướng dẫn xử lý..."
+                placeholder={t('Mô tả mối đe dọa, hướng dẫn xử lý...')}
                 style={{ ...fieldControl, resize: 'none' }}
               />
             </div>
@@ -166,7 +168,7 @@ export default function AlertCenterPage() {
                 opacity: broadcastMut.isPending ? 0.7 : 1,
               }}
             >
-              {broadcastMut.isPending ? 'Đang phát…' : 'Phát cảnh báo toàn tổ chức'}
+              {broadcastMut.isPending ? t('Đang phát…') : t('Phát cảnh báo toàn tổ chức')}
             </button>
           </form>
 
@@ -180,14 +182,14 @@ export default function AlertCenterPage() {
             }}
           >
             <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: '0 0 16px' }}>
-              Lịch sử phát · Broadcast History
+              {t('Lịch sử phát · Broadcast History')}
             </h2>
             {isLoading && (
-              <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>Đang tải lịch sử…</div>
+              <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>{t('Đang tải lịch sử…')}</div>
             )}
             {!isLoading && isError && (
               <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>
-                <span style={{ color: 'var(--red)', fontWeight: 600 }}>Không tải được lịch sử. </span>
+                <span style={{ color: 'var(--red)', fontWeight: 600 }}>{t('Không tải được lịch sử. ')}</span>
                 <button
                   type="button"
                   onClick={() => refetch()}
@@ -201,12 +203,12 @@ export default function AlertCenterPage() {
                     padding: 0,
                   }}
                 >
-                  Thử lại
+                  {t('Thử lại')}
                 </button>
               </div>
             )}
             {!isLoading && !isError && history.length === 0 && (
-              <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>Chưa có thông báo nào.</div>
+              <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>{t('Chưa có thông báo nào.')}</div>
             )}
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 10 }}>
               {history.map((rec) => {

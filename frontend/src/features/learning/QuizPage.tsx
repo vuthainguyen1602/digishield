@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 import { useToast } from '@/shared/ui';
 import { useQuiz, useSubmitResponses, type QuizQuestion } from './api';
+import { useT } from '@/shared/i18n/I18nProvider';
 
 /**
  * QuizPage — interactive quiz (`/learn/quiz/:id`).
@@ -36,6 +37,7 @@ export default function QuizPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
+  const t = useT();
 
   const { data: quiz, isLoading, isError, refetch } = useQuiz(id);
   const submitMutation = useSubmitResponses(id);
@@ -74,7 +76,7 @@ export default function QuizPage() {
     if (!allAnswered) {
       // Validation: jump to first unanswered question.
       const firstUnanswered = questions.findIndex((_, i) => answers[i] == null);
-      toast('Vui lòng trả lời tất cả câu hỏi trước khi nộp bài.');
+      toast(t('Vui lòng trả lời tất cả câu hỏi trước khi nộp bài.'));
       if (firstUnanswered >= 0) setCurrent(firstUnanswered);
       return;
     }
@@ -90,13 +92,13 @@ export default function QuizPage() {
         navigate(`/learn/quiz/${id}/results`, { state: { result } });
       },
       onError: () => {
-        toast('Không thể nộp bài. Vui lòng thử lại.');
+        toast(t('Không thể nộp bài. Vui lòng thử lại.'));
       },
     });
   }
 
   if (isLoading) {
-    return <StatusBlock>Đang tải bài kiểm tra…</StatusBlock>;
+    return <StatusBlock>{t('Đang tải bài kiểm tra…')}</StatusBlock>;
   }
   if (isError || !quiz || total === 0 || !question) {
     return (
@@ -104,18 +106,18 @@ export default function QuizPage() {
         {isError || !quiz ? (
           <>
             <span style={{ color: 'var(--red)', fontWeight: 600 }}>
-              Không tải được bài kiểm tra.{' '}
+              {t('Không tải được bài kiểm tra.')}{' '}
             </span>
             <button
               type="button"
               onClick={() => refetch()}
               style={{ all: 'unset', color: 'var(--blue)', cursor: 'pointer', fontWeight: 600 }}
             >
-              Thử lại
+              {t('Thử lại')}
             </button>
           </>
         ) : (
-          'Bài kiểm tra này chưa có câu hỏi.'
+          t('Bài kiểm tra này chưa có câu hỏi.')
         )}
       </StatusBlock>
     );
@@ -133,11 +135,11 @@ export default function QuizPage() {
           }}
         >
           <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--muted)' }}>
-            Câu {current + 1} / {total}
+            {t('Câu {a} / {b}', { a: current + 1, b: total })}
           </div>
           <div
             role="timer"
-            aria-label="Thời gian còn lại"
+            aria-label={t('Thời gian còn lại')}
             style={{
               background: '#FBE0DF',
               borderRadius: 999,
@@ -162,7 +164,7 @@ export default function QuizPage() {
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={progressPct}
-          aria-label="Tiến độ bài kiểm tra"
+          aria-label={t('Tiến độ bài kiểm tra')}
           style={{
             background: 'var(--bg)',
             borderRadius: 999,
@@ -208,7 +210,7 @@ export default function QuizPage() {
 
           <div
             role="radiogroup"
-            aria-label="Đáp án"
+            aria-label={t('Đáp án')}
             style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
           >
             {question.options.map((opt, i) => {
@@ -276,12 +278,12 @@ export default function QuizPage() {
               onClick={() => goTo(current - 1)}
               style={navBtn('secondary')}
             >
-              ← Câu trước
+              ← {t('Câu trước')}
             </button>
           )}
 
           {/* Dot navigation */}
-          <div style={{ display: 'flex', gap: 6 }} role="group" aria-label="Chuyển câu">
+          <div style={{ display: 'flex', gap: 6 }} role="group" aria-label={t('Chuyển câu')}>
             {questions.map((_, i) => {
               const isCurrent = i === current;
               const isAnswered = answers[i] != null;
@@ -297,7 +299,11 @@ export default function QuizPage() {
                   type="button"
                   onClick={() => goTo(i)}
                   aria-current={isCurrent ? 'true' : undefined}
-                  aria-label={`Câu ${i + 1}${isAnswered ? ', đã trả lời' : ', chưa trả lời'}`}
+                  aria-label={
+                    isAnswered
+                      ? t('Câu {n}, đã trả lời', { n: i + 1 })
+                      : t('Câu {n}, chưa trả lời', { n: i + 1 })
+                  }
                   style={{
                     width: 28,
                     height: 28,
@@ -329,11 +335,11 @@ export default function QuizPage() {
                 ...(submitMutation.isPending ? { opacity: 0.6, cursor: 'wait' } : {}),
               }}
             >
-              {submitMutation.isPending ? 'Đang nộp…' : 'Nộp bài'}
+              {submitMutation.isPending ? t('Đang nộp…') : t('Nộp bài')}
             </button>
           ) : (
             <button type="button" onClick={() => goTo(current + 1)} style={navBtn('primary')}>
-              Câu tiếp →
+              {t('Câu tiếp')} →
             </button>
           )}
         </div>
@@ -347,7 +353,7 @@ export default function QuizPage() {
           }}
           aria-live="polite"
         >
-          Đã trả lời {answeredCount} / {total} câu
+          {t('Đã trả lời {a} / {b} câu', { a: answeredCount, b: total })}
         </p>
     </div>
   );

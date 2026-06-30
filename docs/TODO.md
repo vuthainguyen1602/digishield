@@ -16,8 +16,10 @@ dictionary keyed by the Vietnamese source string (VI = identity, EN = lookup wit
 fallback). `LanguageSwitcher` (VI/EN) in the top bar, persisted to localStorage.
 - [x] Infra + switcher + app shell (Sidebar nav/sections, Topbar, page titles)
 - [x] Login + Admin Dashboard fully localized
-- [ ] Remaining feature pages (SOC, learning, campaigns, admin, etc.) — wrap
-      strings in `t('…')` and add EN entries to `messages.ts`, file by file.
+- [x] SOC pages (Inbox, Alert Center, Threat Intel, Intervention Log, Watchlist)
+- [x] Learning pages (Portal, Course Catalog, Lesson Player, Quiz, Quiz Results)
+- [ ] Remaining feature pages (campaigns, users, admin/super, settings, etc.) —
+      wrap strings in `t('…')` and add EN entries to `messages.ts`, file by file.
 
 ---
 

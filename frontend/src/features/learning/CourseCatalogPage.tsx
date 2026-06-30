@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Fish, Phone, Bot, type LucideIcon } from 'lucide-react';
 import { useCourses, type Course as CourseDto } from './api';
+import { useT } from '@/shared/i18n/I18nProvider';
 
 /**
  * CourseCatalogPage — learner course grid (`/learn/courses`).
@@ -38,23 +39,23 @@ function normalizeState(status: string | null | undefined): CourseState {
 }
 
 /** Map a backend `CourseView` onto the card view model. */
-function toCourse(dto: CourseDto, index: number): Course {
+function toCourse(dto: CourseDto, index: number, t: ReturnType<typeof useT>): Course {
   const state = normalizeState(dto.status);
   const progressPct = typeof dto.progress === 'number' ? Math.max(0, Math.min(100, dto.progress)) : 0;
   const lessons = dto.lessonCount ?? 0;
   const duration = dto.durationMin ?? 0;
-  const meta = `${lessons} bài · ${duration} phút`;
+  const meta = t('{lessons} bài · {duration} phút', { lessons, duration });
 
   const completed = state === 'completed';
   const inProgress = state === 'in_progress';
 
   let statusLabel = '';
-  if (completed) statusLabel = 'Hoàn thành';
-  else if (inProgress) statusLabel = `${progressPct}% · Đang học`;
+  if (completed) statusLabel = t('Hoàn thành');
+  else if (inProgress) statusLabel = t('{progressPct}% · Đang học', { progressPct });
 
-  let ctaLabel = 'Chưa mở';
-  if (completed) ctaLabel = 'Xem lại';
-  else if (inProgress) ctaLabel = 'Học tiếp →';
+  let ctaLabel = t('Chưa mở');
+  if (completed) ctaLabel = t('Xem lại');
+  else if (inProgress) ctaLabel = t('Học tiếp →');
 
   const iconBg = completed
     ? '#DDF3E6'
@@ -64,7 +65,7 @@ function toCourse(dto: CourseDto, index: number): Course {
 
   return {
     id: dto.id,
-    title: dto.title ?? 'Khóa học',
+    title: dto.title ?? t('Khóa học'),
     meta,
     icon: ICONS[index % ICONS.length] ?? ShieldCheck,
     iconBg,
@@ -72,38 +73,39 @@ function toCourse(dto: CourseDto, index: number): Course {
     progressPct,
     statusLabel,
     ctaLabel,
-    ...(state === 'locked' ? { lockedNote: 'Hoàn thành các bài trước để mở khóa' } : {}),
+    ...(state === 'locked' ? { lockedNote: t('Hoàn thành các bài trước để mở khóa') } : {}),
   };
 }
 
 export default function CourseCatalogPage() {
   const navigate = useNavigate();
+  const t = useT();
   const { data, isLoading, isError, refetch } = useCourses();
 
-  const courses = (data ?? []).map(toCourse);
+  const courses = (data ?? []).map((dto, index) => toCourse(dto, index, t));
 
   return (
     <div style={{ animation: 'fadeUp .3s ease' }}>
       <header style={{ marginBottom: 20 }}>
-          <h1 style={pageTitle}>Khóa học của bạn · Your Courses</h1>
+          <h1 style={pageTitle}>{t('Khóa học của bạn · Your Courses')}</h1>
           <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }}>
-            Lộ trình: Nhân viên văn phòng
+            {t('Lộ trình: Nhân viên văn phòng')}
           </p>
         </header>
 
-        {isLoading && <CatalogMessage>Đang tải khóa học…</CatalogMessage>}
+        {isLoading && <CatalogMessage>{t('Đang tải khóa học…')}</CatalogMessage>}
 
         {!isLoading && isError && (
           <CatalogMessage>
-            <span style={{ color: 'var(--red)', fontWeight: 600 }}>Không tải được khóa học. </span>
+            <span style={{ color: 'var(--red)', fontWeight: 600 }}>{t('Không tải được khóa học. ')}</span>
             <button type="button" onClick={() => refetch()} style={inlineRetry}>
-              Thử lại
+              {t('Thử lại')}
             </button>
           </CatalogMessage>
         )}
 
         {!isLoading && !isError && courses.length === 0 && (
-          <CatalogMessage>Chưa có khóa học nào.</CatalogMessage>
+          <CatalogMessage>{t('Chưa có khóa học nào.')}</CatalogMessage>
         )}
 
         {!isLoading && !isError && courses.length > 0 && (

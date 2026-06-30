@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Button, useToast } from '@/shared/ui';
+import { useT } from '@/shared/i18n/I18nProvider';
 import { useInterventions, type InterventionEvent, type InterventionDecision } from './api';
 
 /**
@@ -51,11 +52,11 @@ function toDecision(raw: InterventionDecision | undefined): Decision {
 }
 
 /** Map a backend `InterventionEvent` onto the table view model. */
-function toRow(dto: InterventionEvent, idx: number): LogRow {
+function toRow(dto: InterventionEvent, idx: number, noSignalLabel: string): LogRow {
   return {
     id: dto.id ?? `iv-${idx}`,
     time: formatDateTime(dto.ts),
-    signal: dto.signals && dto.signals.length > 0 ? dto.signals.join(', ') : 'Không có tín hiệu',
+    signal: dto.signals && dto.signals.length > 0 ? dto.signals.join(', ') : noSignalLabel,
     user: dto.user_id ? dto.user_id.slice(0, 8) : '—',
     decision: toDecision(dto.decision),
   };
@@ -79,10 +80,15 @@ function exportCsv(rows: LogRow[]) {
 const GRID = '150px 1fr 130px 110px';
 
 export default function InterventionLogPage() {
+  const t = useT();
   const toast = useToast();
   const { data, isLoading, isError, refetch } = useInterventions();
 
-  const rows = useMemo<LogRow[]>(() => (data ?? []).map(toRow), [data]);
+  const noSignalLabel = t('Không có tín hiệu');
+  const rows = useMemo<LogRow[]>(
+    () => (data ?? []).map((dto, idx) => toRow(dto, idx, noSignalLabel)),
+    [data, noSignalLabel],
+  );
 
   const counts = useMemo(() => {
     const c: Record<Decision, number> = { ALLOW: 0, WARN: 0, PAUSE: 0, BLOCK: 0 };
@@ -101,9 +107,9 @@ export default function InterventionLogPage() {
           }}
         >
           <div>
-            <h1 style={pageTitle}>Nhật ký can thiệp · Intervention Log</h1>
+            <h1 style={pageTitle}>{t('Nhật ký can thiệp · Intervention Log')}</h1>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              SDK đánh giá rủi ro giao dịch · Phục vụ kiểm toán
+              {t('SDK đánh giá rủi ro giao dịch · Phục vụ kiểm toán')}
             </p>
           </div>
           <Button
@@ -112,10 +118,10 @@ export default function InterventionLogPage() {
             disabled={rows.length === 0}
             onClick={() => {
               exportCsv(rows);
-              toast(`Đã xuất ${rows.length} dòng`);
+              toast(t('Đã xuất {n} dòng', { n: rows.length }));
             }}
           >
-            Xuất CSV
+            {t('Xuất CSV')}
           </Button>
         </header>
 
@@ -172,24 +178,24 @@ export default function InterventionLogPage() {
               background: 'var(--bg)',
             }}
           >
-            {['Thời gian', 'Tín hiệu rủi ro', 'Người dùng', 'Quyết định'].map((h) => (
+            {[t('Thời gian'), t('Tín hiệu rủi ro'), t('Người dùng'), t('Quyết định')].map((h) => (
               <div key={h} style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--muted)' }}>
                 {h}
               </div>
             ))}
           </div>
 
-          {isLoading && <TableMessage>Đang tải nhật ký…</TableMessage>}
+          {isLoading && <TableMessage>{t('Đang tải nhật ký…')}</TableMessage>}
           {!isLoading && isError && (
             <TableMessage>
-              Không tải được dữ liệu.{' '}
+              {t('Không tải được dữ liệu.')}{' '}
               <button type="button" onClick={() => refetch()} style={inlineRetry}>
-                Thử lại
+                {t('Thử lại')}
               </button>
             </TableMessage>
           )}
           {!isLoading && !isError && rows.length === 0 && (
-            <TableMessage>Chưa có can thiệp nào được ghi nhận.</TableMessage>
+            <TableMessage>{t('Chưa có can thiệp nào được ghi nhận.')}</TableMessage>
           )}
 
           {!isLoading &&
