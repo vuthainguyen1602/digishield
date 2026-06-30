@@ -1,6 +1,7 @@
 import { ProgressBar, RiskGauge, StatusPill } from '@/shared/ui';
 import { ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useT } from '@/shared/i18n/I18nProvider';
 import { useDashboard } from './api';
 
 /**
@@ -56,23 +57,24 @@ const cardStyle: React.CSSProperties = {
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
+  const t = useT();
   const { data, isLoading, isError, refetch } = useDashboard();
 
   if (isLoading) {
-    return <DashboardState>Đang tải bảng điều khiển…</DashboardState>;
+    return <DashboardState>{t('Đang tải bảng điều khiển…')}</DashboardState>;
   }
 
   if (isError || !data) {
     return (
       <DashboardState>
         <div style={{ color: 'var(--color-red)', fontWeight: 600, marginBottom: 8 }}>
-          Không tải được dữ liệu bảng điều khiển
+          {t('Không tải được dữ liệu bảng điều khiển')}
         </div>
         <div style={{ fontSize: 13, color: 'var(--color-muted)', marginBottom: 14 }}>
-          Vui lòng kiểm tra kết nối tới máy chủ rồi thử lại.
+          {t('Vui lòng kiểm tra kết nối tới máy chủ rồi thử lại.')}
         </div>
         <button type="button" onClick={() => refetch()} style={retryBtn}>
-          Thử lại
+          {t('Thử lại')}
         </button>
       </DashboardState>
     );
@@ -118,7 +120,7 @@ export default function AdminDashboardPage() {
             <div style={{ ...labelStyle, marginBottom: 10, alignSelf: 'flex-start' }}>Risk Score</div>
             <RiskGauge score={riskScore} size={150} />
             <div style={{ fontSize: 12, color: 'var(--color-amber)', fontWeight: 500, marginTop: 4 }}>
-              {deltaText(data.risk_delta ?? 0)} vs tháng trước
+              {deltaText(data.risk_delta ?? 0)} {t('vs tháng trước')}
             </div>
           </div>
 
@@ -150,9 +152,9 @@ export default function AdminDashboardPage() {
             >
               {deltaText(data.phish_prone_pct_delta ?? 0, '%')}
             </span>
-            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}> so tháng trước</span>
+            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}> {t('so tháng trước')}</span>
             <div style={{ fontSize: 12, color: 'var(--color-muted)', marginTop: 10 }}>
-              TB ngành gov:{' '}
+              {t('TB ngành gov')}:{' '}
               <strong style={{ color: 'var(--color-amber)', fontFamily: "'JetBrains Mono', monospace" }}>
                 {data.industry_avg_pct ?? 0}%
               </strong>
@@ -161,7 +163,7 @@ export default function AdminDashboardPage() {
 
           {/* Training completion */}
           <div style={cardStyle}>
-            <div style={{ ...labelStyle, marginBottom: 12 }}>Hoàn thành ĐT</div>
+            <div style={{ ...labelStyle, marginBottom: 12 }}>{t('Hoàn thành ĐT')}</div>
             <div
               style={{
                 fontFamily: "'Space Grotesk', system-ui",
@@ -185,9 +187,9 @@ export default function AdminDashboardPage() {
                 fontWeight: 600,
               }}
             >
-              hoàn thành
+              {t('hoàn thành')}
             </span>
-            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}> trong tháng</span>
+            <span style={{ fontSize: 12, color: 'var(--color-muted)' }}> {t('trong tháng')}</span>
             <div style={{ marginTop: 12 }}>
               <ProgressBar value={trainingCompletion} max={100} color="var(--color-teal)" />
             </div>
@@ -195,7 +197,7 @@ export default function AdminDashboardPage() {
 
           {/* Open alerts */}
           <div style={cardStyle}>
-            <div style={{ ...labelStyle, marginBottom: 12 }}>Cảnh báo mở</div>
+            <div style={{ ...labelStyle, marginBottom: 12 }}>{t('Cảnh báo mở')}</div>
             <div
               style={{
                 fontFamily: "'Space Grotesk', system-ui",
@@ -245,9 +247,9 @@ export default function AdminDashboardPage() {
             >
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>
-                  Xu hướng rủi ro · Risk Trend
+                  {t('Xu hướng rủi ro')}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--color-muted)' }}>90 ngày qua</div>
+                <div style={{ fontSize: 12, color: 'var(--color-muted)' }}>90 {t('ngày qua')}</div>
               </div>
               <div
                 style={{
@@ -323,7 +325,7 @@ export default function AdminDashboardPage() {
           {/* Benchmark bar chart */}
           <div style={cardStyle}>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)', marginBottom: 4 }}>
-              So chuẩn ngành · Benchmark
+              {t('So chuẩn ngành')}
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 18 }}>Phish-prone %</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -378,11 +380,11 @@ export default function AdminDashboardPage() {
           {/* Department risk bars */}
           <div style={cardStyle}>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)', marginBottom: 16 }}>
-              Phòng ban rủi ro cao
+              {t('Phòng ban rủi ro cao')}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
               {departments.length === 0 && (
-                <div style={{ fontSize: 13, color: 'var(--color-muted)' }}>Chưa có dữ liệu phòng ban.</div>
+                <div style={{ fontSize: 13, color: 'var(--color-muted)' }}>{t('Chưa có dữ liệu phòng ban.')}</div>
               )}
               {departments.map((d) => (
                 <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -435,7 +437,7 @@ export default function AdminDashboardPage() {
                 marginBottom: 14,
               }}
             >
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>Báo cáo gần đây</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>{t('Báo cáo gần đây')}</div>
               <button
                 type="button"
                 onClick={() => navigate('/soc')}
@@ -450,13 +452,13 @@ export default function AdminDashboardPage() {
                   gap: 4,
                 }}
               >
-                Xem tất cả <ArrowRight size={13} />
+                {t('Xem tất cả')} <ArrowRight size={13} />
               </button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {recentReports.length === 0 && (
                 <div style={{ fontSize: 13, color: 'var(--color-muted)', padding: '9px 10px' }}>
-                  Chưa có báo cáo nào.
+                  {t('Chưa có báo cáo nào.')}
                 </div>
               )}
               {recentReports.map((r) => (

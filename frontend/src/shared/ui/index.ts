@@ -49,3 +49,4 @@ export { Sidebar } from './Sidebar';
 export { Topbar } from './Topbar';
 export { RoleSwitcher } from './RoleSwitcher';
 export { NotificationBell } from './NotificationBell';
+export { LanguageSwitcher } from './LanguageSwitcher';

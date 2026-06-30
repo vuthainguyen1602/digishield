@@ -7,6 +7,7 @@ import { Logo } from './Logo';
 import { RoleSwitcher } from './RoleSwitcher';
 import { cognitoEnabled } from '@/app/auth/cognito';
 import { NavIcon } from './navIcons';
+import { useT } from '@/shared/i18n/I18nProvider';
 import styles from './Sidebar.module.css';
 
 function initialsOf(name?: string, email?: string): string {
@@ -23,6 +24,7 @@ function initialsOf(name?: string, email?: string): string {
 export function Sidebar() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const t = useT();
   const persona = user ? roleToPersona(user.role) : 'admin';
   const items = NAV_BY_PERSONA[persona] ?? [];
 
@@ -50,7 +52,7 @@ export function Sidebar() {
       <nav className={styles.nav}>
         {sections.map((section, si) => (
           <Fragment key={section.heading ?? si}>
-            {section.heading ? <div className={styles.section}>{section.heading}</div> : null}
+            {section.heading ? <div className={styles.section}>{t(section.heading)}</div> : null}
             {section.items.map((item) => (
               <NavLink
                 key={item.key}
@@ -60,7 +62,7 @@ export function Sidebar() {
                 }
               >
                 <NavIcon name={item.icon} />
-                <span className={styles.linkLabel}>{item.label}</span>
+                <span className={styles.linkLabel}>{t(item.label)}</span>
                 {item.badge ? <span className={styles.badge}>{item.badge}</span> : null}
               </NavLink>
             ))}
@@ -79,7 +81,7 @@ export function Sidebar() {
           </span>
           <span className={styles.profileMeta}>
             <span className={styles.profileName}>{user?.name ?? 'Nguyễn Tuấn'}</span>
-            <span className={styles.profileLink}>Hồ sơ &amp; Cài đặt</span>
+            <span className={styles.profileLink}>{t('Hồ sơ & Cài đặt')}</span>
           </span>
           <ChevronRight size={13} strokeWidth={2} color="var(--color-muted)" />
         </button>

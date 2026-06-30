@@ -9,6 +9,18 @@ Legend: 🔴 core gap · 🟡 integration/mock · 🟢 cleanup · ✅ done
 
 ---
 
+## 🌐 i18n (Vietnamese ⇄ English)
+
+Dependency-free i18n (`src/shared/i18n/`): `I18nProvider` + `useT()` + a VI→EN
+dictionary keyed by the Vietnamese source string (VI = identity, EN = lookup with
+fallback). `LanguageSwitcher` (VI/EN) in the top bar, persisted to localStorage.
+- [x] Infra + switcher + app shell (Sidebar nav/sections, Topbar, page titles)
+- [x] Login + Admin Dashboard fully localized
+- [ ] Remaining feature pages (SOC, learning, campaigns, admin, etc.) — wrap
+      strings in `t('…')` and add EN entries to `messages.ts`, file by file.
+
+---
+
 ## 🔴 High priority — core product not running for real
 
 ### AI module — Claude integration (gated)

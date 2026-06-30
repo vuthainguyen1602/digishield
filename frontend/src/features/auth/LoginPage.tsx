@@ -11,12 +11,14 @@ import {
 import { Logo } from '@/shared/ui';
 import { DEMO_TENANT_ID } from '@/shared/api/tenant';
 import { cognitoEnabled } from '@/app/auth/cognito';
+import { useT } from '@/shared/i18n/I18nProvider';
 import { AuthScreen, AuthCard, authInputStyle, authLabelStyle } from './authShared';
 
 /** Login — 4-role pill segmented control + email/password + SSO. */
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login, signinRedirect } = useAuth();
+  const t = useT();
   const [persona, setPersona] = useState<Persona>('admin');
   const [email, setEmail] = useState('admin@coquan.gov.vn');
   const [password, setPassword] = useState('demo1234');
@@ -44,11 +46,11 @@ export default function LoginPage() {
             <Logo size={36} wordmarkSize={26} />
           </div>
           <div style={{ fontSize: 13.5, color: 'var(--color-muted)', marginBottom: 28 }}>
-            Nền tảng nhận thức an ninh số · Digital Security Awareness Platform
+            {t('Nền tảng nhận thức an ninh số')}
           </div>
           <AuthCard style={{ padding: 32 }}>
             <div style={{ fontSize: 14, color: 'var(--color-text-soft)', marginBottom: 20 }}>
-              Đăng nhập bằng tài khoản tổ chức (AWS Cognito).
+              {t('Đăng nhập bằng tài khoản tổ chức (AWS Cognito).')}
             </div>
             <button
               type="button"
@@ -65,7 +67,7 @@ export default function LoginPage() {
                 fontSize: 15,
               }}
             >
-              Đăng nhập
+              {t('Đăng nhập')}
             </button>
           </AuthCard>
           <div style={{ marginTop: 20, fontSize: 12, color: 'var(--color-muted)' }}>
@@ -84,7 +86,7 @@ export default function LoginPage() {
             <Logo size={36} wordmarkSize={26} />
           </div>
           <div style={{ fontSize: 13.5, color: 'var(--color-muted)' }}>
-            Nền tảng nhận thức an ninh số · Digital Security Awareness Platform
+            {t('Nền tảng nhận thức an ninh số')}
           </div>
         </div>
 
@@ -104,7 +106,7 @@ export default function LoginPage() {
             }}
           >
             <Users size={14} strokeWidth={2} />
-            Chọn vai trò để đăng nhập
+            {t('Chọn vai trò để đăng nhập')}
           </div>
 
           <div style={{ marginBottom: 20 }}>
@@ -118,7 +120,7 @@ export default function LoginPage() {
                 marginBottom: 8,
               }}
             >
-              Vai trò / Role
+              {t('Vai trò')}
             </div>
             <div
               style={{
@@ -160,7 +162,7 @@ export default function LoginPage() {
           <form onSubmit={doLogin}>
             <div style={{ marginBottom: 14 }}>
               <label htmlFor="login-email" style={authLabelStyle}>
-                Email công việc
+                {t('Email công việc')}
               </label>
               <input
                 id="login-email"
@@ -182,13 +184,13 @@ export default function LoginPage() {
                 }}
               >
                 <label htmlFor="login-pw" style={{ ...authLabelStyle, marginBottom: 0 }}>
-                  Mật khẩu
+                  {t('Mật khẩu')}
                 </label>
                 <span
                   onClick={() => navigate('/auth/forgot-password')}
                   style={{ fontSize: 12, color: 'var(--color-blue)', cursor: 'pointer' }}
                 >
-                  Quên mật khẩu?
+                  {t('Quên mật khẩu?')}
                 </span>
               </div>
               <input
@@ -219,7 +221,7 @@ export default function LoginPage() {
                 opacity: submitting ? 0.7 : 1,
               }}
             >
-              {submitting ? 'Đang đăng nhập…' : 'Đăng nhập'}
+              {submitting ? t('Đang đăng nhập…') : t('Đăng nhập')}
             </button>
           </form>
 
@@ -238,7 +240,7 @@ export default function LoginPage() {
               cursor: 'pointer',
             }}
           >
-            Đăng nhập bằng SSO (Entra ID / Google Workspace)
+            {t('Đăng nhập bằng SSO (Entra ID / Google Workspace)')}
           </button>
         </AuthCard>
 
