@@ -39,7 +39,16 @@ import org.springframework.test.context.ActiveProfiles;
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.flyway.enabled=false",
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect",
-        "spring.datasource.driver-class-name=org.postgresql.Driver"
+        "spring.datasource.driver-class-name=org.postgresql.Driver",
+        // The resource-server starter (pulled in transitively via shared:security)
+        // is on the test classpath, so in this MOCK web slice Spring Boot would
+        // auto-configure an OAuth2 resource-server SecurityFilterChain that needs a
+        // JwtDecoder. The real one lives in shared:security's SecurityConfig, which
+        // a single-module slice does not scan — so exclude that auto-config here.
+        // (The full-context @SpringBootTest ITs keep it.)
+        "spring.autoconfigure.exclude="
+                + "org.springframework.boot.security.oauth2.server.resource.autoconfigure.OAuth2ResourceServerAutoConfiguration,"
+                + "org.springframework.boot.security.oauth2.server.resource.autoconfigure.web.OAuth2ResourceServerWebSecurityAutoConfiguration"
 })
 @ActiveProfiles("dev")
 class SimulationModuleIT {
