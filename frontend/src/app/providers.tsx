@@ -6,6 +6,7 @@ import { queryClient } from '@/shared/api/queryClient';
 import { ToastProvider } from '@/shared/ui';
 import { I18nProvider } from '@/shared/i18n/I18nProvider';
 import { AuthProvider } from './auth/AuthContext';
+import { LocaleSync } from './LocaleSync';
 
 interface AppProvidersProps {
   children: ReactNode;
@@ -24,6 +25,7 @@ export function AppProviders({ children }: AppProvidersProps) {
       <I18nProvider>
         <BrowserRouter>
           <AuthProvider>
+            <LocaleSync />
             <ToastProvider>{children}</ToastProvider>
           </AuthProvider>
         </BrowserRouter>

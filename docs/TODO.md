@@ -14,6 +14,8 @@ Legend: 🔴 core gap · 🟡 integration/mock · 🟢 cleanup · ✅ done
 Dependency-free i18n (`src/shared/i18n/`): `I18nProvider` + `useT()` + a VI→EN
 dictionary keyed by the Vietnamese source string (VI = identity, EN = lookup with
 fallback). `LanguageSwitcher` (VI/EN) in the top bar, persisted to localStorage.
+Language also syncs from the signed-in user's profile `locale` claim via
+`LocaleSync` (precedence: explicit switcher choice > profile locale > VI).
 - [x] Infra + switcher + app shell (Sidebar nav/sections, Topbar, page titles)
 - [x] Login + Admin Dashboard fully localized
 - [x] SOC pages (Inbox, Alert Center, Threat Intel, Intervention Log, Watchlist)
