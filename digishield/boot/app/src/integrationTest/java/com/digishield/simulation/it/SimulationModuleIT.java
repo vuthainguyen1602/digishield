@@ -12,45 +12,42 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.modulith.test.ApplicationModuleTest;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Spring Modulith slice test for the {@code simulation} module.
+ * Integration test for the {@code simulation} module's outbound contract.
  *
- * <p>{@link ApplicationModuleTest} bootstraps only the simulation module (plus
- * the shared infrastructure it depends on) and stubs out the rest of the system.
- * We then verify the module's contract with the outside world: recording a
- * {@link SimAction#CLICK} must publish a {@link UserClickedSimulationEvent} so
- * downstream modules (learning, analytics, ...) can react.
+ * <p>Verifies that recording a {@link SimAction#CLICK} publishes a
+ * {@link UserClickedSimulationEvent} so downstream modules (learning, analytics,
+ * ...) can react, while non-CLICK actions publish nothing.
+ *
+ * <p>Booted as a full {@link SpringBootTest} (like the reporting/interception
+ * ITs) rather than a Spring Modulith slice: the boot app's composition-root
+ * adapters (in the base {@code com.digishield} package) inject {@code AuthService}
+ * and leak into any single-module slice, so a slice either misses that bean or —
+ * once mocked from a module-owned test class — trips Modulith's architecture
+ * verification with a forbidden {@code simulation -> auth :: api} dependency. The
+ * full context provides the real {@code AuthService}; only a {@code JwtDecoder} is
+ * stubbed for the OAuth2 resource-server security chain.
  *
  * <p>The module persists a {@code SimEvent} via JPA, so a real PostgreSQL is
- * provided by Testcontainers. Hibernate creates the schema for the slice
+ * provided by Testcontainers. Hibernate creates the schema
  * ({@code ddl-auto=create-drop}) since Flyway is disabled here.
  *
  * <p>Requires Docker and JDK 25.
  */
-@ApplicationModuleTest(module = "simulation")
-@TestPropertySource(properties = {
+@SpringBootTest(properties = {
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.flyway.enabled=false",
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect",
         "spring.datasource.driver-class-name=org.postgresql.Driver",
-        // The resource-server starter (pulled in transitively via shared:security)
-        // is on the test classpath, so in this MOCK web slice Spring Boot would
-        // auto-configure an OAuth2 resource-server SecurityFilterChain that needs a
-        // JwtDecoder. The real one lives in shared:security's SecurityConfig, which
-        // a single-module slice does not scan — so exclude that auto-config here.
-        // (The full-context @SpringBootTest ITs keep it.)
-        "spring.autoconfigure.exclude="
-                + "org.springframework.boot.security.oauth2.server.resource.autoconfigure.OAuth2ResourceServerAutoConfiguration,"
-                + "org.springframework.boot.security.oauth2.server.resource.autoconfigure.web.OAuth2ResourceServerWebSecurityAutoConfiguration"
+        // No Redis in this IT: use a no-op cache and skip the Redis health check.
+        "spring.cache.type=none",
+        "management.health.redis.enabled=false"
 })
-@ActiveProfiles("dev")
 class SimulationModuleIT {
 
     private static final String TENANT = "33333333-3333-3333-3333-333333333333";
@@ -67,6 +64,13 @@ class SimulationModuleIT {
         @org.springframework.context.annotation.Bean
         public TestEventListener testEventListener() {
             return new TestEventListener();
+        }
+
+        // The full context auto-configures an OAuth2 resource-server security chain
+        // that needs a JwtDecoder; the real one talks to an external IdP, so stub it.
+        @org.springframework.context.annotation.Bean
+        public org.springframework.security.oauth2.jwt.JwtDecoder jwtDecoder() {
+            return org.mockito.Mockito.mock(org.springframework.security.oauth2.jwt.JwtDecoder.class);
         }
     }
 
@@ -95,13 +99,6 @@ class SimulationModuleIT {
 
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     private com.digishield.shared.messaging.EventPublisher eventPublisher;
-
-    // The composition-root adapters (com.digishield.AuthRecipientResolver /
-    // AuthUserDirectory) live in the application base package, so they leak into
-    // every module slice and require an AuthService bean — which the auth module
-    // is not part of this simulation slice. Mock it so the context can start.
-    @org.springframework.test.context.bean.override.mockito.MockitoBean
-    private com.digishield.auth.api.AuthService authService;
 
     @Autowired
     private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
