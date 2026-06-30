@@ -96,6 +96,13 @@ class SimulationModuleIT {
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     private com.digishield.shared.messaging.EventPublisher eventPublisher;
 
+    // The composition-root adapters (com.digishield.AuthRecipientResolver /
+    // AuthUserDirectory) live in the application base package, so they leak into
+    // every module slice and require an AuthService bean — which the auth module
+    // is not part of this simulation slice. Mock it so the context can start.
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.digishield.auth.api.AuthService authService;
+
     @Autowired
     private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
 
