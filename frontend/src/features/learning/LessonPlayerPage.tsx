@@ -1,5 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/shared/ui';
+import { useT } from '@/shared/i18n/I18nProvider';
 import { useLesson } from './api';
 
 /**
@@ -27,21 +28,22 @@ function normalizeCpState(value: string | null | undefined): CheckpointState {
 export default function LessonPlayerPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const t = useT();
   const { data: lesson, isLoading, isError, refetch } = useLesson(id);
 
   if (isLoading) {
-    return <StatusBlock>Đang tải bài học…</StatusBlock>;
+    return <StatusBlock>{t('Đang tải bài học…')}</StatusBlock>;
   }
   if (isError || !lesson) {
     return (
       <StatusBlock>
-        <span style={{ color: 'var(--red)', fontWeight: 600 }}>Không tải được bài học. </span>
+        <span style={{ color: 'var(--red)', fontWeight: 600 }}>{t('Không tải được bài học. ')}</span>
         <button
           type="button"
           onClick={() => refetch()}
           style={{ all: 'unset', color: 'var(--blue)', cursor: 'pointer', fontWeight: 600 }}
         >
-          Thử lại
+          {t('Thử lại')}
         </button>
       </StatusBlock>
     );
@@ -69,7 +71,7 @@ export default function LessonPlayerPage() {
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={progressPct}
-          aria-label="Tiến độ bài học"
+          aria-label={t('Tiến độ bài học')}
         >
           <div
             style={{
@@ -104,7 +106,7 @@ export default function LessonPlayerPage() {
                   fontSize: 14,
                 }}
               >
-                [ Hình minh họa / Video nội dung ]
+                {t('[ Hình minh họa / Video nội dung ]')}
               </div>
               <div style={{ padding: 24 }}>
                 <h1
@@ -156,14 +158,14 @@ export default function LessonPlayerPage() {
             {/* Prev / Next nav */}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
-                ← Bài trước
+                {t('← Bài trước')}
               </Button>
               <Button
                 type="button"
                 variant="primary"
                 onClick={() => navigate(`/learn/quiz/${id ?? 'quiz-1'}`)}
               >
-                Bài tiếp → Thực hành
+                {t('Bài tiếp → Thực hành')}
               </Button>
             </div>
           </div>
@@ -171,7 +173,7 @@ export default function LessonPlayerPage() {
           {/* Sidebar outline */}
           <aside style={{ width: 200, flexShrink: 0 }}>
             <nav
-              aria-label="Trong bài này"
+              aria-label={t('Trong bài này')}
               style={{
                 background: 'var(--surface)',
                 border: '1px solid var(--border)',
@@ -191,7 +193,7 @@ export default function LessonPlayerPage() {
                   textTransform: 'uppercase',
                 }}
               >
-                Trong bài này
+                {t('Trong bài này')}
               </div>
               <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
                 {checkpoints.map((cp) => {

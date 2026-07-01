@@ -14,16 +14,23 @@ export const queryKeys = {
   quiz: (id: string) => ['learning', 'lessons', id, 'quiz'] as const,
   certificate: (id: string) => ['learning', 'certificates', id] as const,
   blacklist: ['reports', 'blacklist'] as const,
+  aiTemplates: ['ai', 'templates'] as const,
+  aidaRuns: ['ai', 'orchestration', 'runs'] as const,
+  threatIntel: ['reports', 'threat-intel'] as const,
+  interventions: ['interception', 'interventions'] as const,
   notifications: ['notifications'] as const,
   users: ['auth', 'users'] as const,
   compliancePolicies: ['compliance', 'policies'] as const,
   complianceStatus: ['compliance', 'status'] as const,
   simCampaign: (id: string) => ['sim', 'campaign', id] as const,
+  groups: ['tenancy', 'groups'] as const,
   // Tenancy (admin org settings)
   tenantSettings: (tenantId: string) => ['tenancy', 'settings', tenantId] as const,
+  businessThresholds: (tenantId: string) => ['tenancy', 'thresholds', tenantId] as const,
   featureFlags: (tenantId: string) => ['tenancy', 'feature-flags', tenantId] as const,
   // Gamification (admin)
   leaderboard: ['gamification', 'leaderboard'] as const,
+  pointRules: ['gamification', 'point-rules'] as const,
   userBadges: (userId: string) => ['gamification', 'badges', userId] as const,
   userPoints: (userId: string) => ['gamification', 'points', userId] as const,
   // Super admin

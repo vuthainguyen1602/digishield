@@ -132,6 +132,12 @@ public interface LearningService {
     int getPoints(UUID tenantId, UUID userId);
 
     /**
+     * Lists the tenant's gamification point rules (points awarded/deducted per
+     * action), highest first.
+     */
+    List<PointRuleView> listPointRules(UUID tenantId);
+
+    /**
      * Lists the compliance policies of a tenant.
      */
     List<CompliancePolicyView> listCompliancePolicies(UUID tenantId);

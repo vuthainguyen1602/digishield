@@ -1,14 +1,17 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Target, Zap, Award, AlertTriangle } from 'lucide-react';
-import { Button, ProgressBar } from '@/shared/ui';
+import { Button, ProgressBar, Drawer, Select, useToast } from '@/shared/ui';
 import { useAuth } from '@/app/auth/useAuth';
+import { useT } from '@/shared/i18n/I18nProvider';
 import {
   useEnrollments,
   useLeaderboard,
   useUserBadges,
   useUserPoints,
+  useReportPhishing,
   type Enrollment,
+  type ReportChannel,
 } from './api';
 
 /**
@@ -73,27 +76,28 @@ function formatPoints(n: number): string {
 }
 
 /** Derive a task from an enrollment (skip completed ones). */
-function toTask(e: Enrollment): LearnerTask | null {
+function toTask(e: Enrollment, t: ReturnType<typeof useT>): LearnerTask | null {
   const status = (e.status ?? '').toLowerCase();
   if (status === 'completed') return null;
   const overdue = status === 'overdue';
-  const title = e.courseTitle ?? 'Khoá học';
+  const title = e.courseTitle ?? t('Khoá học');
   return {
     id: e.id,
-    title: overdue ? `Hoàn thành "${title}"` : `Tiếp tục "${title}"`,
+    title: overdue ? t('Hoàn thành "{title}"', { title }) : t('Tiếp tục "{title}"', { title }),
     due:
       typeof e.progress === 'number'
-        ? `Tiến độ ${e.progress}%`
+        ? t('Tiến độ {progress}%', { progress: e.progress })
         : overdue
-          ? 'Quá hạn'
-          : 'Chưa bắt đầu',
+          ? t('Quá hạn')
+          : t('Chưa bắt đầu'),
     urgency: overdue ? 'overdue' : 'upcoming',
     to: '/learn/courses',
-    cta: overdue ? 'Làm bài' : 'Học ngay',
+    cta: overdue ? t('Làm bài') : t('Học ngay'),
   };
 }
 
 export default function LearnerPortalPage() {
+  const t = useT();
   const navigate = useNavigate();
   const { user } = useAuth();
   const userId = user?.id ?? null;
@@ -122,10 +126,10 @@ export default function LearnerPortalPage() {
   const tasks = useMemo<LearnerTask[]>(
     () =>
       enrollments
-        .map(toTask)
-        .filter((t): t is LearnerTask => t != null)
+        .map((e) => toTask(e, t))
+        .filter((task): task is LearnerTask => task != null)
         .sort((a, b) => URGENCY_ORDER.indexOf(a.urgency) - URGENCY_ORDER.indexOf(b.urgency)),
-    [enrollments],
+    [enrollments, t],
   );
   const openTaskCount = tasks.length;
 
@@ -162,16 +166,43 @@ export default function LearnerPortalPage() {
         ? formatPoints(myLeaderRow.points)
         : '—';
   const rankLabel = myLeaderRow
-    ? `Hạng ${myLeaderRow.rank} trong tổ chức`
-    : 'Bảng xếp hạng tổ chức';
+    ? t('Hạng {rank} trong tổ chức', { rank: myLeaderRow.rank })
+    : t('Bảng xếp hạng tổ chức');
 
-  const learnerName = user?.name ?? 'bạn';
+  const learnerName = user?.name ?? t('bạn');
   const dateLabel = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 
   const enrollmentsLoading = enrollmentsQuery.isLoading;
   const enrollmentsError = enrollmentsQuery.isError;
 
+  // Report-phishing CTA → a Drawer that submits to POST /reports/phishing.
+  const toast = useToast();
+  const reportMut = useReportPhishing();
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportChannel, setReportChannel] = useState<ReportChannel>('email');
+  const [reportPayload, setReportPayload] = useState('');
+
+  function submitReport() {
+    const payload = reportPayload.trim();
+    if (payload.length === 0) {
+      toast(t('Vui lòng dán nội dung nghi ngờ'));
+      return;
+    }
+    reportMut.mutate(
+      { payload, channel: reportChannel },
+      {
+        onSuccess: () => {
+          toast(t('Đã gửi báo cáo. Cảm ơn bạn!'));
+          setReportOpen(false);
+          setReportPayload('');
+        },
+        onError: () => toast(t('Gửi báo cáo thất bại, thử lại')),
+      },
+    );
+  }
+
   return (
+    <>
     <div style={{ animation: 'fadeUp .3s ease' }}>
       {/* Greeting + report CTA */}
         <header
@@ -194,19 +225,14 @@ export default function LearnerPortalPage() {
                 margin: '0 0 4px',
               }}
             >
-              Xin chào, {learnerName}
+              {t('Xin chào, {learnerName}', { learnerName })}
             </h1>
             <p style={{ margin: 0, fontSize: 13.5, color: 'var(--muted)' }}>
-              Hôm nay là {dateLabel} · Bạn có {openTaskCount} việc cần làm
+              {t('Hôm nay là {dateLabel} · Bạn có {openTaskCount} việc cần làm', { dateLabel, openTaskCount })}
             </p>
           </div>
-          {/* TODO: wire to report-phishing flow / generated mutation. */}
-          <Button
-            type="button"
-            variant="danger"
-            onClick={() => navigate('/learn/report')}
-          >
-            Báo cáo lừa đảo
+          <Button type="button" variant="danger" onClick={() => setReportOpen(true)}>
+            {t('Báo cáo lừa đảo')}
           </Button>
         </header>
 
@@ -228,7 +254,7 @@ export default function LearnerPortalPage() {
               padding: 20,
             }}
           >
-            <h2 style={cardTitle}>Tiến độ học · Progress</h2>
+            <h2 style={cardTitle}>{t('Tiến độ học · Progress')}</h2>
             <div
               style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}
             >
@@ -247,11 +273,11 @@ export default function LearnerPortalPage() {
               </span>
             </div>
             <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 12px' }}>
-              {lessonsDone}/{lessonsTotal} khoá hoàn thành
+              {t('{lessonsDone}/{lessonsTotal} khoá hoàn thành', { lessonsDone, lessonsTotal })}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               {badges.length === 0 && (
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>Chưa có huy hiệu</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('Chưa có huy hiệu')}</span>
               )}
               {badges.map((b) => {
                 const Icon = b.icon;
@@ -293,7 +319,7 @@ export default function LearnerPortalPage() {
               padding: 20,
             }}
           >
-            <h2 style={cardTitle}>Điểm &amp; Xếp hạng · Points</h2>
+            <h2 style={cardTitle}>{t('Điểm & Xếp hạng · Points')}</h2>
             <div
               style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 10 }}
             >
@@ -308,7 +334,7 @@ export default function LearnerPortalPage() {
               >
                 {points}
               </span>
-              <span style={{ fontSize: 14, color: 'var(--muted)' }}>điểm</span>
+              <span style={{ fontSize: 14, color: 'var(--muted)' }}>{t('điểm')}</span>
             </div>
             <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 12px' }}>
               {rankLabel}
@@ -324,7 +350,7 @@ export default function LearnerPortalPage() {
             >
               {leaderboard.length === 0 && (
                 <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>
-                  {leaderboardQuery.isLoading ? 'Đang tải…' : 'Chưa có dữ liệu xếp hạng'}
+                  {leaderboardQuery.isLoading ? t('Đang tải…') : t('Chưa có dữ liệu xếp hạng')}
                 </div>
               )}
               {leaderboard.map((row) => (
@@ -371,20 +397,20 @@ export default function LearnerPortalPage() {
             borderRadius: 12,
             padding: 20,
           }}
-          aria-label="Việc cần làm"
+          aria-label={t('Việc cần làm')}
         >
-          <h2 style={cardTitle}>Việc cần làm · Tasks</h2>
+          <h2 style={cardTitle}>{t('Việc cần làm · Tasks')}</h2>
           {enrollmentsLoading && (
-            <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }}>Đang tải…</p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }}>{t('Đang tải…')}</p>
           )}
           {!enrollmentsLoading && enrollmentsError && (
             <p style={{ fontSize: 13, color: 'var(--red)', margin: 0 }}>
-              Không tải được danh sách. Vui lòng thử lại.
+              {t('Không tải được danh sách. Vui lòng thử lại.')}
             </p>
           )}
           {!enrollmentsLoading && !enrollmentsError && tasks.length === 0 && (
             <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }}>
-              Bạn đã hoàn thành tất cả nhiệm vụ.
+              {t('Bạn đã hoàn thành tất cả nhiệm vụ.')}
             </p>
           )}
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
@@ -447,6 +473,62 @@ export default function LearnerPortalPage() {
           </ul>
         </section>
     </div>
+
+    <Drawer
+      open={reportOpen}
+      onClose={() => setReportOpen(false)}
+      title={t('Báo cáo lừa đảo')}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>
+          {t('Dán nội dung email/SMS đáng ngờ (kèm link, người gửi nếu có). Đội SOC sẽ phân tích và cảnh báo cả tổ chức nếu là mối đe dọa thật.')}
+        </p>
+        <Select
+          label={t('Kênh')}
+          value={reportChannel}
+          onChange={(e) => setReportChannel(e.target.value as ReportChannel)}
+        >
+          <option value="email">{t('Email')}</option>
+          <option value="sms">{t('SMS')}</option>
+        </Select>
+        <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)' }}>
+          {t('Nội dung nghi ngờ')}
+          <textarea
+            value={reportPayload}
+            onChange={(e) => setReportPayload(e.target.value)}
+            rows={8}
+            placeholder={t('Dán nội dung email/SMS, đường link hoặc số điện thoại đáng ngờ…')}
+            style={{
+              width: '100%',
+              marginTop: 6,
+              padding: '10px 12px',
+              fontSize: 13,
+              fontFamily: 'inherit',
+              color: 'var(--text)',
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              resize: 'vertical',
+              boxSizing: 'border-box',
+            }}
+          />
+        </label>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+          <Button type="button" variant="secondary" onClick={() => setReportOpen(false)}>
+            {t('Huỷ')}
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            disabled={reportMut.isPending}
+            onClick={submitReport}
+          >
+            {reportMut.isPending ? t('Đang gửi…') : t('Gửi báo cáo')}
+          </Button>
+        </div>
+      </div>
+    </Drawer>
+    </>
   );
 }
 

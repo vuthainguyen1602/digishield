@@ -68,6 +68,17 @@ public interface TenancyService {
     TenantSettingsView updateTenantSettings(UUID tenantId, TenantSettingsView settings);
 
     /**
+     * Gets the business thresholds of a tenant, creating sensible defaults if
+     * none exist yet.
+     */
+    BusinessThresholdsView getThresholds(UUID tenantId);
+
+    /**
+     * Updates a tenant's business thresholds; null fields are left unchanged.
+     */
+    BusinessThresholdsView updateThresholds(UUID tenantId, BusinessThresholdsView command);
+
+    /**
      * Enables or disables a feature flag for a tenant, creating it if absent.
      */
     FeatureFlagView setFeatureFlag(UUID tenantId, String key, boolean enabled);

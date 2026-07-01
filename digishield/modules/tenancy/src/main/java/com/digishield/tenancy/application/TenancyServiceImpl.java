@@ -1,7 +1,7 @@
 package com.digishield.tenancy.application;
 
 import com.digishield.tenancy.api.AuditLogView;
-import com.digishield.tenancy.api.ChangePlanCommand;
+import com.digishield.tenancy.api.BusinessThresholdsView;
 import com.digishield.tenancy.api.CreateTenantCommand;
 import com.digishield.tenancy.api.FeatureFlagView;
 import com.digishield.tenancy.api.GroupView;
@@ -15,6 +15,7 @@ import com.digishield.tenancy.api.TenantView;
 import com.digishield.tenancy.api.UpdateTenantCommand;
 import com.digishield.tenancy.api.UsageMeteringView;
 import com.digishield.tenancy.domain.AuditLog;
+import com.digishield.tenancy.domain.BusinessThresholds;
 import com.digishield.tenancy.domain.FeatureFlag;
 import com.digishield.tenancy.domain.Group;
 import com.digishield.tenancy.domain.Plan;
@@ -26,6 +27,7 @@ import com.digishield.tenancy.domain.TenantStatus;
 import com.digishield.tenancy.domain.TenantTier;
 import com.digishield.tenancy.domain.UsageMetering;
 import com.digishield.tenancy.infrastructure.AuditLogRepository;
+import com.digishield.tenancy.infrastructure.BusinessThresholdsRepository;
 import com.digishield.tenancy.infrastructure.FeatureFlagRepository;
 import com.digishield.tenancy.infrastructure.GroupRepository;
 import com.digishield.tenancy.infrastructure.PlanRepository;
@@ -61,6 +63,7 @@ public class TenancyServiceImpl implements TenancyService {
     private final AuditLogRepository auditLogRepository;
     private final ScimConfigRepository scimConfigRepository;
     private final TenantSettingsRepository tenantSettingsRepository;
+    private final BusinessThresholdsRepository businessThresholdsRepository;
     private final GroupRepository groupRepository;
     private final PlanRepository planRepository;
     private final SubscriptionRepository subscriptionRepository;
@@ -72,6 +75,7 @@ public class TenancyServiceImpl implements TenancyService {
                               AuditLogRepository auditLogRepository,
                               ScimConfigRepository scimConfigRepository,
                               TenantSettingsRepository tenantSettingsRepository,
+                              BusinessThresholdsRepository businessThresholdsRepository,
                               GroupRepository groupRepository,
                               PlanRepository planRepository,
                               SubscriptionRepository subscriptionRepository,
@@ -82,6 +86,7 @@ public class TenancyServiceImpl implements TenancyService {
         this.auditLogRepository = auditLogRepository;
         this.scimConfigRepository = scimConfigRepository;
         this.tenantSettingsRepository = tenantSettingsRepository;
+        this.businessThresholdsRepository = businessThresholdsRepository;
         this.groupRepository = groupRepository;
         this.planRepository = planRepository;
         this.subscriptionRepository = subscriptionRepository;
@@ -190,6 +195,39 @@ public class TenancyServiceImpl implements TenancyService {
             settings.setDefaultLocale(command.defaultLocale().trim());
         }
         return toSettingsView(tenantSettingsRepository.save(settings));
+    }
+
+    @Override
+    public BusinessThresholdsView getThresholds(UUID tenantId) {
+        BusinessThresholds t = businessThresholdsRepository.findByTenantId(tenantId)
+                .orElseGet(() -> businessThresholdsRepository.save(
+                        new BusinessThresholds(UUID.randomUUID(), tenantId, 60, 70, 2)));
+        return toThresholdsView(t);
+    }
+
+    @Override
+    public BusinessThresholdsView updateThresholds(UUID tenantId, BusinessThresholdsView command) {
+        BusinessThresholds t = businessThresholdsRepository.findByTenantId(tenantId)
+                .orElseGet(() -> new BusinessThresholds(UUID.randomUUID(), tenantId, 60, 70, 2));
+        if (command.riskAlertScore() != null) {
+            t.setRiskAlertScore(clamp(command.riskAlertScore(), 0, 100));
+        }
+        if (command.passScorePct() != null) {
+            t.setPassScorePct(clamp(command.passScorePct(), 0, 100));
+        }
+        if (command.minCampaignsPerQuarter() != null) {
+            t.setMinCampaignsPerQuarter(clamp(command.minCampaignsPerQuarter(), 0, 100));
+        }
+        return toThresholdsView(businessThresholdsRepository.save(t));
+    }
+
+    private BusinessThresholdsView toThresholdsView(BusinessThresholds t) {
+        return new BusinessThresholdsView(
+                t.getRiskAlertScore(), t.getPassScorePct(), t.getMinCampaignsPerQuarter());
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     @Override

@@ -5,6 +5,7 @@ import com.digishield.learning.api.AssessmentResultView;
 import com.digishield.learning.api.AssessmentResultsView;
 import com.digishield.learning.api.AssessmentView;
 import com.digishield.learning.api.BadgeView;
+import com.digishield.learning.api.PointRuleView;
 import com.digishield.learning.api.CertificateView;
 import com.digishield.learning.api.CoachingPageView;
 import com.digishield.learning.api.CompliancePolicyView;
@@ -20,6 +21,7 @@ import com.digishield.learning.api.UserCertificateView;
 import com.digishield.learning.domain.Assessment;
 import com.digishield.learning.domain.AssessmentType;
 import com.digishield.learning.domain.Badge;
+import com.digishield.learning.domain.PointRule;
 import com.digishield.learning.domain.Certificate;
 import com.digishield.learning.domain.CoachingPage;
 import com.digishield.learning.domain.CompliancePolicy;
@@ -38,6 +40,7 @@ import com.digishield.learning.infrastructure.CourseRepository;
 import com.digishield.learning.infrastructure.EnrollmentRepository;
 import com.digishield.learning.infrastructure.GamificationProfileRepository;
 import com.digishield.learning.infrastructure.LessonRepository;
+import com.digishield.learning.infrastructure.PointRuleRepository;
 import com.digishield.learning.infrastructure.QuizQuestionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.ApplicationEventPublisher;
@@ -66,6 +69,7 @@ public class LearningServiceImpl implements LearningService {
     private final CompliancePolicyRepository compliancePolicyRepository;
     private final AssessmentRepository assessmentRepository;
     private final CoachingPageRepository coachingPageRepository;
+    private final PointRuleRepository pointRuleRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
 
@@ -79,6 +83,7 @@ public class LearningServiceImpl implements LearningService {
                                CompliancePolicyRepository compliancePolicyRepository,
                                AssessmentRepository assessmentRepository,
                                CoachingPageRepository coachingPageRepository,
+                               PointRuleRepository pointRuleRepository,
                                ApplicationEventPublisher eventPublisher,
                                ObjectMapper objectMapper) {
         this.courseRepository = courseRepository;
@@ -91,6 +96,7 @@ public class LearningServiceImpl implements LearningService {
         this.compliancePolicyRepository = compliancePolicyRepository;
         this.assessmentRepository = assessmentRepository;
         this.coachingPageRepository = coachingPageRepository;
+        this.pointRuleRepository = pointRuleRepository;
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
     }
@@ -415,6 +421,14 @@ public class LearningServiceImpl implements LearningService {
         return gamificationProfileRepository.findByTenantIdAndUserId(tenantId, userId)
                 .map(GamificationProfile::getPoints)
                 .orElse(0);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PointRuleView> listPointRules(UUID tenantId) {
+        return pointRuleRepository.findByTenantIdOrderByPointsDesc(tenantId).stream()
+                .map(r -> new PointRuleView(r.getAction(), r.getLabel(), r.getPoints()))
+                .toList();
     }
 
     @Override

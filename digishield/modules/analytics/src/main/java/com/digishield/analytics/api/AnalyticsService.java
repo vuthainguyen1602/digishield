@@ -23,6 +23,29 @@ public interface AnalyticsService {
     RiskScore recomputeRisk(UUID userId);
 
     /**
+     * Records a phishing-simulation click as a risk signal for the user and
+     * recomputes their risk score. Called from the module listener for
+     * {@code UserClickedSimulationEvent}, so the tenant is passed explicitly
+     * rather than read from {@code TenantContext}.
+     *
+     * @param tenantId the tenant the user belongs to
+     * @param userId   the user who clicked
+     * @return the recomputed risk score record
+     */
+    RiskScore recordSimulationClick(UUID tenantId, UUID userId);
+
+    /**
+     * Records that the user reported an email later confirmed as a real threat
+     * (a positive, risk-lowering signal) and recomputes their risk score.
+     * Called from the module listener for {@code PhishingReportConfirmedEvent}.
+     *
+     * @param tenantId the tenant the user belongs to
+     * @param userId   the user who reported the threat
+     * @return the recomputed risk score record
+     */
+    RiskScore recordConfirmedReport(UUID tenantId, UUID userId);
+
+    /**
      * Gets the average benchmark score for a scope.
      *
      * @param scope the scope to benchmark

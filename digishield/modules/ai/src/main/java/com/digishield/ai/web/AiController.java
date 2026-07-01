@@ -1,6 +1,7 @@
 package com.digishield.ai.web;
 
 import com.digishield.ai.api.AiService;
+import com.digishield.ai.api.dto.AidaRunView;
 import com.digishield.ai.api.dto.ClassificationView;
 import com.digishield.ai.api.dto.ModerationView;
 import com.digishield.ai.api.dto.SimTemplateView;
@@ -8,11 +9,13 @@ import com.digishield.ai.domain.TemplateChannel;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -41,6 +44,14 @@ public class AiController {
     }
 
     /**
+     * Lists the saved simulation-template library for the current tenant.
+     */
+    @GetMapping("/templates")
+    public ResponseEntity<List<SimTemplateView>> listTemplates() {
+        return ResponseEntity.ok(aiService.listTemplates());
+    }
+
+    /**
      * Classifies a reported email payload.
      */
     @PostMapping("/classify")
@@ -65,6 +76,14 @@ public class AiController {
         UUID scopeId = request == null ? null : request.scopeId();
         aiService.runOrchestration(scope, scopeId);
         return ResponseEntity.status(HttpStatus.ACCEPTED).build();
+    }
+
+    /**
+     * Lists past AIDA orchestration runs for the recent-runs panel.
+     */
+    @GetMapping("/orchestration/runs")
+    public ResponseEntity<List<AidaRunView>> listRuns() {
+        return ResponseEntity.ok(aiService.listRuns());
     }
 
     /** DTO for template generation request. */

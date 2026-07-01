@@ -1,10 +1,12 @@
 package com.digishield.ai.api;
 
+import com.digishield.ai.api.dto.AidaRunView;
 import com.digishield.ai.api.dto.ClassificationView;
 import com.digishield.ai.api.dto.ModerationView;
 import com.digishield.ai.api.dto.SimTemplateView;
 import com.digishield.ai.domain.TemplateChannel;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -22,6 +24,12 @@ public interface AiService {
     SimTemplateView generateTemplate(TemplateChannel channel, String industry, String season);
 
     /**
+     * Lists the saved simulation-template library for the current tenant
+     * (most-recently the seeded/generated drafts).
+     */
+    List<SimTemplateView> listTemplates();
+
+    /**
      * Classifies a reported email payload and returns a label, confidence and
      * reasoning.
      */
@@ -34,7 +42,14 @@ public interface AiService {
 
     /**
      * Runs the AIDA orchestration flow (recompute risk and auto-enroll) for the
-     * given scope. In dev this acknowledges and logs the intent (no-op).
+     * given scope and records the run for the admin console. The real pipeline is
+     * still TODO; the run record is created so history is available.
      */
     void runOrchestration(String scope, UUID scopeId);
+
+    /**
+     * Lists past AIDA orchestration runs for the current tenant, most recent
+     * first.
+     */
+    List<AidaRunView> listRuns();
 }

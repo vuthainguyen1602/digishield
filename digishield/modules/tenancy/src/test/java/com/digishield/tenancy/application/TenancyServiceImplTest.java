@@ -1,12 +1,15 @@
 package com.digishield.tenancy.application;
 
+import com.digishield.tenancy.api.BusinessThresholdsView;
 import com.digishield.tenancy.api.CreateTenantCommand;
 import com.digishield.tenancy.api.FeatureFlagView;
 import com.digishield.tenancy.api.TenantView;
+import com.digishield.tenancy.domain.BusinessThresholds;
 import com.digishield.tenancy.domain.FeatureFlag;
 import com.digishield.tenancy.domain.Tenant;
 import com.digishield.tenancy.domain.TenantStatus;
 import com.digishield.tenancy.domain.TenantTier;
+import com.digishield.tenancy.infrastructure.BusinessThresholdsRepository;
 import com.digishield.tenancy.infrastructure.FeatureFlagRepository;
 import com.digishield.tenancy.infrastructure.TenantRepository;
 import org.junit.jupiter.api.Test;
@@ -41,6 +44,9 @@ class TenancyServiceImplTest {
 
     @Mock
     private FeatureFlagRepository featureFlagRepository;
+
+    @Mock
+    private BusinessThresholdsRepository businessThresholdsRepository;
 
     @InjectMocks
     private TenancyServiceImpl tenancyService;
@@ -126,5 +132,40 @@ class TenancyServiceImplTest {
 
         // Act + Assert
         assertThat(tenancyService.isEnabled(tenantId, "unknown")).isFalse();
+    }
+
+    @Test
+    void getThresholds_whenNone_createsAndReturnsDefaults() {
+        // Arrange
+        when(businessThresholdsRepository.findByTenantId(TENANT_ID)).thenReturn(Optional.empty());
+        when(businessThresholdsRepository.save(any(BusinessThresholds.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        // Act
+        BusinessThresholdsView view = tenancyService.getThresholds(TENANT_ID);
+
+        // Assert: sensible defaults are persisted
+        assertThat(view.riskAlertScore()).isEqualTo(60);
+        assertThat(view.passScorePct()).isEqualTo(70);
+        assertThat(view.minCampaignsPerQuarter()).isEqualTo(2);
+        verify(businessThresholdsRepository).save(any(BusinessThresholds.class));
+    }
+
+    @Test
+    void updateThresholds_overridesProvidedFieldsAndClamps() {
+        // Arrange: existing row, patch only two fields (one out of range)
+        BusinessThresholds existing = new BusinessThresholds(UUID.randomUUID(), TENANT_ID, 60, 70, 2);
+        when(businessThresholdsRepository.findByTenantId(TENANT_ID)).thenReturn(Optional.of(existing));
+        when(businessThresholdsRepository.save(any(BusinessThresholds.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        // Act: risk 150 → clamped to 100; pass null → unchanged; campaigns 4
+        BusinessThresholdsView view = tenancyService.updateThresholds(
+                TENANT_ID, new BusinessThresholdsView(150, null, 4));
+
+        // Assert
+        assertThat(view.riskAlertScore()).isEqualTo(100);
+        assertThat(view.passScorePct()).isEqualTo(70);
+        assertThat(view.minCampaignsPerQuarter()).isEqualTo(4);
     }
 }

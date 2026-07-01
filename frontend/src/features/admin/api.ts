@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/shared/api/client';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { DEMO_TENANT_ID } from '@/shared/api/tenant';
@@ -151,6 +151,85 @@ export function useUserPoints(userId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Gamification point rules — learning module
+// ---------------------------------------------------------------------------
+
+/** Mirrors `PointRuleView` (`GET /gamification/point-rules`). */
+export interface PointRule {
+  action: string;
+  label: string;
+  points: number;
+}
+
+/** GET /gamification/point-rules — points awarded/deducted per action. */
+export function fetchPointRules(signal?: AbortSignal): Promise<PointRule[]> {
+  return apiRequest<PointRule[]>({
+    url: '/gamification/point-rules',
+    method: 'GET',
+    ...(signal ? { signal } : {}),
+  });
+}
+
+/** Query hook for the point-rules panel in {@link GamificationPage}. */
+export function usePointRules() {
+  return useQuery({
+    queryKey: queryKeys.pointRules,
+    queryFn: ({ signal }) => fetchPointRules(signal),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Business thresholds (org-settings) — tenancy module
+// ---------------------------------------------------------------------------
+
+/** Mirrors `BusinessThresholdsView` (snake_case wire shape). */
+export interface BusinessThresholds {
+  risk_alert_score: number;
+  pass_score_pct: number;
+  min_campaigns_per_quarter: number;
+}
+
+/** GET /tenants/{id}/thresholds — the tenant's business thresholds. */
+export function fetchThresholds(tenantId: string, signal?: AbortSignal): Promise<BusinessThresholds> {
+  return apiRequest<BusinessThresholds>({
+    url: `/tenants/${tenantId}/thresholds`,
+    method: 'GET',
+    ...(signal ? { signal } : {}),
+  });
+}
+
+/** PATCH /tenants/{id}/thresholds — update the tenant's business thresholds. */
+export function patchThresholds(
+  tenantId: string,
+  body: BusinessThresholds,
+): Promise<BusinessThresholds> {
+  return apiRequest<BusinessThresholds>({
+    url: `/tenants/${tenantId}/thresholds`,
+    method: 'PATCH',
+    data: body,
+  });
+}
+
+/** Query hook for the business thresholds shown in {@link OrgSettingsPage}. */
+export function useBusinessThresholds(tenantId: string = DEMO_TENANT_ID) {
+  return useQuery({
+    queryKey: queryKeys.businessThresholds(tenantId),
+    queryFn: ({ signal }) => fetchThresholds(tenantId, signal),
+  });
+}
+
+/** Mutation hook to save the business thresholds; refreshes the query on success. */
+export function useUpdateThresholds(tenantId: string = DEMO_TENANT_ID) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BusinessThresholds) => patchThresholds(tenantId, body),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.businessThresholds(tenantId), data);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // AIDA / AI orchestration — ai + interception modules
 // ---------------------------------------------------------------------------
 
@@ -206,4 +285,60 @@ export function useClassify() {
 /** useMutation hook wrapping POST /interventions/evaluate. */
 export function useEvaluateIntervention() {
   return useMutation({ mutationFn: evaluateIntervention });
+}
+
+// ---------------------------------------------------------------------------
+// AIDA orchestration runs (history) — ai module
+// ---------------------------------------------------------------------------
+
+/** Mirrors `AidaRunView` (`GET /ai/orchestration/runs`). snake_case wire shape. */
+export interface AidaRun {
+  id: string;
+  scope: string;
+  scope_id?: string | null;
+  status: string;
+  summary?: string | null;
+  created_at?: string;
+}
+
+/** GET /ai/orchestration/runs — recent AIDA runs for the tenant, newest first. */
+export function fetchAidaRuns(signal?: AbortSignal): Promise<AidaRun[]> {
+  return apiRequest<AidaRun[]>({
+    url: '/ai/orchestration/runs',
+    method: 'GET',
+    ...(signal ? { signal } : {}),
+  });
+}
+
+/** TanStack Query hook powering the recent-runs panel in {@link AidaPage}. */
+export function useAidaRuns() {
+  return useQuery({
+    queryKey: queryKeys.aidaRuns,
+    queryFn: ({ signal }) => fetchAidaRuns(signal),
+  });
+}
+
+/** Body for `POST /ai/orchestration/run`. */
+export interface RunOrchestrationRequest {
+  scope: string;
+}
+
+/** POST /ai/orchestration/run — trigger AIDA and record the run. */
+export function runOrchestration(body: RunOrchestrationRequest): Promise<void> {
+  return apiRequest<void>({
+    url: '/ai/orchestration/run',
+    method: 'POST',
+    data: body,
+  });
+}
+
+/** Mutation hook for triggering AIDA; refreshes the runs panel on success. */
+export function useRunOrchestration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: runOrchestration,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.aidaRuns });
+    },
+  });
 }

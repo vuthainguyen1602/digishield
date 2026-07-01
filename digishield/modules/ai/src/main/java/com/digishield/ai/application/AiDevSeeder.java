@@ -1,9 +1,11 @@
 package com.digishield.ai.application;
 
+import com.digishield.ai.domain.AidaRun;
 import com.digishield.ai.domain.AiTemplate;
 import com.digishield.ai.domain.Difficulty;
 import com.digishield.ai.domain.TemplateChannel;
 import com.digishield.ai.domain.TemplateStatus;
+import com.digishield.ai.infrastructure.AidaRunRepository;
 import com.digishield.ai.infrastructure.AiTemplateRepository;
 import com.digishield.shared.tenantcontext.DemoTenants;
 import org.springframework.boot.CommandLineRunner;
@@ -11,6 +13,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -26,13 +30,20 @@ public class AiDevSeeder implements CommandLineRunner {
     private static final UUID DEMO_TENANT = DemoTenants.DEMO_TENANT_ID;
 
     private final AiTemplateRepository templateRepository;
+    private final AidaRunRepository aidaRunRepository;
 
-    public AiDevSeeder(AiTemplateRepository templateRepository) {
+    public AiDevSeeder(AiTemplateRepository templateRepository, AidaRunRepository aidaRunRepository) {
         this.templateRepository = templateRepository;
+        this.aidaRunRepository = aidaRunRepository;
     }
 
     @Override
     public void run(String... args) {
+        seedTemplates();
+        seedAidaRuns();
+    }
+
+    private void seedTemplates() {
         if (!templateRepository.findByTenantId(DEMO_TENANT).isEmpty()) {
             return;
         }
@@ -51,5 +62,20 @@ public class AiDevSeeder implements CommandLineRunner {
                 UUID.randomUUID(), DEMO_TENANT, TemplateChannel.ZALO,
                 "Quét mã nhận ưu đãi mùa hè ngành bán lẻ",
                 "tmpl/zalo/ban-le-he", Difficulty.HARD, TemplateStatus.DRAFT));
+    }
+
+    private void seedAidaRuns() {
+        if (!aidaRunRepository.findByTenantIdOrderByCreatedAtDesc(DEMO_TENANT).isEmpty()) {
+            return;
+        }
+        Instant now = Instant.now();
+
+        aidaRunRepository.save(new AidaRun(
+                UUID.randomUUID(), DEMO_TENANT, "org", null, "success",
+                "87 người được tự động đăng ký khóa học mới.", now.minus(Duration.ofDays(4))));
+
+        aidaRunRepository.save(new AidaRun(
+                UUID.randomUUID(), DEMO_TENANT, "Phòng Kế toán", null, "success",
+                "34 người được cập nhật lộ trình học.", now.minus(Duration.ofDays(19))));
     }
 }

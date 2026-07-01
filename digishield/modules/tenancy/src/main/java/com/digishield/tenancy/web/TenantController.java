@@ -1,6 +1,7 @@
 package com.digishield.tenancy.web;
 
 import com.digishield.tenancy.api.AuditLogView;
+import com.digishield.tenancy.api.BusinessThresholdsView;
 import com.digishield.tenancy.api.ChangePlanCommand;
 import com.digishield.tenancy.api.CreateTenantCommand;
 import com.digishield.tenancy.api.FeatureFlagView;
@@ -86,6 +87,23 @@ class TenantController {
     ResponseEntity<TenantSettingsView> updateSettings(@PathVariable UUID tenantId,
                                                       @RequestBody TenantSettingsView command) {
         return ResponseEntity.ok(tenancyService.updateTenantSettings(tenantId, command));
+    }
+
+    /**
+     * Returns the business thresholds of a tenant.
+     */
+    @GetMapping("/api/v1/tenants/{tenantId}/thresholds")
+    ResponseEntity<BusinessThresholdsView> thresholds(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(tenancyService.getThresholds(tenantId));
+    }
+
+    /**
+     * Updates the business thresholds of a tenant (null fields unchanged).
+     */
+    @PatchMapping("/api/v1/tenants/{tenantId}/thresholds")
+    ResponseEntity<BusinessThresholdsView> updateThresholds(@PathVariable UUID tenantId,
+                                                            @RequestBody BusinessThresholdsView command) {
+        return ResponseEntity.ok(tenancyService.updateThresholds(tenantId, command));
     }
 
     /**

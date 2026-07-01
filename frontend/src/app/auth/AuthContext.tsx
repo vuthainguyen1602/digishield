@@ -20,6 +20,8 @@ export interface CurrentUser {
   /** Optional display fields populated from /auth/me. */
   name?: string;
   email?: string;
+  /** Preferred UI language (BCP-47, e.g. "en" or "vi") from the profile claim. */
+  locale?: string;
 }
 
 export interface AuthState {

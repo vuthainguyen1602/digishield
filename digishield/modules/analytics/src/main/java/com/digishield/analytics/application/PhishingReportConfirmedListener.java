@@ -1,22 +1,38 @@
 package com.digishield.analytics.application;
 
+import com.digishield.analytics.api.AnalyticsService;
 import com.digishield.contracts.events.PhishingReportConfirmedEvent;
+import com.digishield.shared.tenantcontext.TenantContext;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Listens for {@code PhishingReportConfirmedEvent} from the reporting module
- * and flags that the related risk score needs to be recomputed.
+ * Listens for {@code PhishingReportConfirmedEvent} from the reporting module and
+ * records it as a vigilant (risk-lowering) signal for the reporter, recomputing
+ * their risk score. Reporting a real threat is good behaviour, so it reduces the
+ * user's phish-prone score.
  * <p>
- * Minimal body: in practice this would enqueue a risk recomputation job or
- * call {@code AnalyticsService.recomputeRisk(...)}.
+ * {@link ApplicationModuleListener} runs asynchronously in its own transaction,
+ * so the tenant is passed explicitly to the service. {@link TenantContext} is
+ * also set for the duration of the call so the row-level-security aspect can
+ * scope the writes to this tenant.
  */
 @Component
-public class PhishingReportConfirmedListener {
+class PhishingReportConfirmedListener {
+
+    private final AnalyticsService analyticsService;
+
+    PhishingReportConfirmedListener(AnalyticsService analyticsService) {
+        this.analyticsService = analyticsService;
+    }
 
     @ApplicationModuleListener
-    public void on(PhishingReportConfirmedEvent event) {
-        // TODO: flag that risk needs recomputing for the corresponding tenant/report.
-        // tenantId = event.tenantId(), reportId = event.reportId()
+    void on(PhishingReportConfirmedEvent event) {
+        TenantContext.set(event.tenantId().toString());
+        try {
+            analyticsService.recordConfirmedReport(event.tenantId(), event.userId());
+        } finally {
+            TenantContext.clear();
+        }
     }
 }

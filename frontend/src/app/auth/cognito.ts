@@ -55,6 +55,7 @@ export function toCurrentUser(user: User): CurrentUser {
   const p = user.profile as Record<string, unknown>;
   const email = typeof p.email === 'string' ? p.email : undefined;
   const name = typeof p.name === 'string' ? p.name : email;
+  const locale = typeof p.locale === 'string' ? p.locale : undefined;
   const current: CurrentUser = {
     id: String(p.sub ?? ''),
     tenantId: (import.meta.env.VITE_TENANT_ID as string | undefined) || DEMO_TENANT_ID,
@@ -62,5 +63,6 @@ export function toCurrentUser(user: User): CurrentUser {
   };
   if (email !== undefined) current.email = email;
   if (name !== undefined) current.name = name;
+  if (locale !== undefined) current.locale = locale;
   return current;
 }

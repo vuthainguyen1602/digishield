@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { Button, useToast } from '@/shared/ui';
+import { useT } from '@/shared/i18n/I18nProvider';
 import { useBlacklist, type BlacklistEntry } from './watchlistApi';
 
 /**
@@ -62,6 +63,7 @@ const GRID = '1fr 110px 160px 70px';
 type Filter = 'all' | WlType;
 
 export default function WatchlistPage() {
+  const t = useT();
   const toast = useToast();
   const [filter, setFilter] = useState<Filter>('all');
   const { data, isLoading, isError, refetch } = useBlacklist();
@@ -84,10 +86,10 @@ export default function WatchlistPage() {
   );
 
   const filters: { id: Filter; label: string }[] = [
-    { id: 'all', label: `Tất cả (${counts.all})` },
-    { id: 'bank', label: `Tài khoản ngân hàng (${counts.bank})` },
-    { id: 'phone', label: `Số điện thoại (${counts.phone})` },
-    { id: 'domain', label: `Domain (${counts.domain})` },
+    { id: 'all', label: t('Tất cả ({n})', { n: counts.all }) },
+    { id: 'bank', label: t('Tài khoản ngân hàng ({n})', { n: counts.bank }) },
+    { id: 'phone', label: t('Số điện thoại ({n})', { n: counts.phone }) },
+    { id: 'domain', label: t('Domain ({n})', { n: counts.domain }) },
   ];
 
   return (
@@ -101,17 +103,17 @@ export default function WatchlistPage() {
           }}
         >
           <div>
-            <h1 style={pageTitle}>Watchlist tài khoản nghi ngờ</h1>
+            <h1 style={pageTitle}>{t('Watchlist tài khoản nghi ngờ')}</h1>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              Theo dõi số tài khoản, SĐT và domain nghi ngờ từ nhiều nguồn
+              {t('Theo dõi số tài khoản, SĐT và domain nghi ngờ từ nhiều nguồn')}
             </p>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <Button type="button" variant="secondary" onClick={() => toast('Đang đồng bộ NCSC...')}>
-              Đồng bộ NCSC
+            <Button type="button" variant="secondary" onClick={() => toast(t('Đang đồng bộ NCSC...'))}>
+              {t('Đồng bộ NCSC')}
             </Button>
-            <Button type="button" variant="primary" onClick={() => toast('Thêm mục thủ công')}>
-              + Thêm thủ công
+            <Button type="button" variant="primary" onClick={() => toast(t('Thêm mục thủ công'))}>
+              {t('+ Thêm thủ công')}
             </Button>
           </div>
         </header>
@@ -127,12 +129,12 @@ export default function WatchlistPage() {
           }}
         >
           <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: '0 0 12px' }}>
-            Tra cứu nhanh · Quick Check
+            {t('Tra cứu nhanh · Quick Check')}
           </h2>
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              toast('Đang kiểm tra...');
+              toast(t('Đang kiểm tra...'));
             }}
             style={{ display: 'flex', gap: 10 }}
           >
@@ -151,8 +153,8 @@ export default function WatchlistPage() {
               <Search size={14} color="var(--muted)" aria-hidden="true" />
               <input
                 type="text"
-                aria-label="Tra cứu watchlist"
-                placeholder="Nhập số tài khoản, SĐT, hoặc domain..."
+                aria-label={t('Tra cứu watchlist')}
+                placeholder={t('Nhập số tài khoản, SĐT, hoặc domain...')}
                 style={{
                   flex: 1,
                   border: 'none',
@@ -165,7 +167,7 @@ export default function WatchlistPage() {
               />
             </div>
             <Button type="submit" variant="primary">
-              Kiểm tra
+              {t('Kiểm tra')}
             </Button>
           </form>
         </section>
@@ -182,7 +184,7 @@ export default function WatchlistPage() {
           {/* Filters */}
           <div
             role="tablist"
-            aria-label="Lọc watchlist"
+            aria-label={t('Lọc watchlist')}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -230,30 +232,30 @@ export default function WatchlistPage() {
           >
             {['Giá trị', 'Loại', 'Nguồn'].map((h) => (
               <div key={h} style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--muted)' }}>
-                {h}
+                {t(h)}
               </div>
             ))}
             <div />
           </div>
 
           {/* Loading / error / empty states */}
-          {isLoading && <TableMessage>Đang tải watchlist…</TableMessage>}
+          {isLoading && <TableMessage>{t('Đang tải watchlist…')}</TableMessage>}
           {!isLoading && isError && (
             <TableMessage>
               <span style={{ color: 'var(--red)', fontWeight: 600 }}>
-                Không tải được watchlist.{' '}
+                {t('Không tải được watchlist.')}{' '}
               </span>
               <button
                 type="button"
                 onClick={() => refetch()}
                 style={{ all: 'unset', color: 'var(--blue)', cursor: 'pointer', fontWeight: 600 }}
               >
-                Thử lại
+                {t('Thử lại')}
               </button>
             </TableMessage>
           )}
           {!isLoading && !isError && visible.length === 0 && (
-            <TableMessage>Không có mục nào trong watchlist.</TableMessage>
+            <TableMessage>{t('Không có mục nào trong watchlist.')}</TableMessage>
           )}
 
           {/* Rows */}
@@ -283,13 +285,13 @@ export default function WatchlistPage() {
                     >
                       {e.value}
                     </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{e.valueMuted}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{t(e.valueMuted)}</div>
                   </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{e.typeLabel}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{t(e.typeLabel)}</div>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>{e.source}</div>
                   <button
                     type="button"
-                    onClick={() => toast(`Đã xóa ${e.value}`)}
+                    onClick={() => toast(t('Đã xóa {value}', { value: e.value }))}
                     style={{
                       all: 'unset',
                       fontSize: 12,
@@ -297,7 +299,7 @@ export default function WatchlistPage() {
                       cursor: 'pointer',
                     }}
                   >
-                    Xóa
+                    {t('Xóa')}
                   </button>
                 </div>
               );

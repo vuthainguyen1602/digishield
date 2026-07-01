@@ -1,13 +1,17 @@
-import { Button } from '@/shared/ui';
+import { useMemo } from 'react';
+import { Button, useToast } from '@/shared/ui';
+import { useT } from '@/shared/i18n/I18nProvider';
+import { useInterventions, type InterventionEvent, type InterventionDecision } from './api';
 
 /**
  * InterventionLogPage — transaction-risk intervention audit log (`/soc/interventions`).
  *
- * Design-consistent placeholder following the prototype: 4 decision KPIs
- * (Allow / Warn / Pause / Block) + an audit table with risk signals, decisions
- * and scores (JetBrains Mono).
+ * 4 decision KPIs (Allow / Warn / Pause / Block) computed from the feed + an
+ * audit table with time, risk signals, the acting user and the decision.
  *
- * TODO: replace MOCK data with generated useInterventionLog() hook from @/api/generated.
+ * Data comes from the live backend via `useInterventions()`
+ * (`GET /interventions`). Loading/error/empty states handled below. "Xuất CSV"
+ * exports the currently loaded rows client-side.
  */
 
 type Decision = 'ALLOW' | 'WARN' | 'PAUSE' | 'BLOCK';
@@ -16,9 +20,8 @@ interface LogRow {
   id: string;
   time: string;
   signal: string;
-  transaction: string;
+  user: string;
   decision: Decision;
-  score: number;
 }
 
 const DECISION_BADGE: Record<Decision, { bg: string; color: string }> = {
@@ -28,23 +31,71 @@ const DECISION_BADGE: Record<Decision, { bg: string; color: string }> = {
   BLOCK: { bg: '#FBE0DF', color: '#BE2A2F' },
 };
 
-const KPIS: { label: string; value: string; color: string }[] = [
-  { label: 'Allow', value: '1.842', color: 'var(--teal)' },
-  { label: 'Warn', value: '247', color: 'var(--amber)' },
-  { label: 'Pause', value: '38', color: 'var(--red)' },
-  { label: 'Block', value: '12', color: '#BE2A2F' },
+const KPI_META: { key: Decision; label: string; color: string }[] = [
+  { key: 'ALLOW', label: 'Allow', color: 'var(--teal)' },
+  { key: 'WARN', label: 'Warn', color: 'var(--amber)' },
+  { key: 'PAUSE', label: 'Pause', color: 'var(--red)' },
+  { key: 'BLOCK', label: 'Block', color: '#BE2A2F' },
 ];
 
-// TODO: replace with generated useInterventionLog() hook from @/api/generated.
-const MOCK_ROWS: LogRow[] = [
-  { id: 'i1', time: '27/06 09:14', signal: 'Đang nghe gọi + TK mới + số tiền lớn', transaction: '50tr → TK mới VCB', decision: 'PAUSE', score: 87 },
-  { id: 'i2', time: '27/06 08:52', signal: 'TK trong blacklist NCSC', transaction: '12tr → TK blacklisted', decision: 'BLOCK', score: 96 },
-  { id: 'i3', time: '27/06 08:31', signal: 'Giao dịch thông thường', transaction: '2tr → TK quen', decision: 'ALLOW', score: 8 },
-];
+/** Format an ISO timestamp as `dd/mm HH:mm`; falls back to em dash. */
+function formatDateTime(iso: string | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
-const GRID = '130px 1fr 1fr 100px 80px';
+function toDecision(raw: InterventionDecision | undefined): Decision {
+  return (raw ?? 'allow').toUpperCase() as Decision;
+}
+
+/** Map a backend `InterventionEvent` onto the table view model. */
+function toRow(dto: InterventionEvent, idx: number, noSignalLabel: string): LogRow {
+  return {
+    id: dto.id ?? `iv-${idx}`,
+    time: formatDateTime(dto.ts),
+    signal: dto.signals && dto.signals.length > 0 ? dto.signals.join(', ') : noSignalLabel,
+    user: dto.user_id ? dto.user_id.slice(0, 8) : '—',
+    decision: toDecision(dto.decision),
+  };
+}
+
+/** Build a CSV blob from the loaded rows and trigger a download. */
+function exportCsv(rows: LogRow[]) {
+  const header = ['Thời gian', 'Tín hiệu rủi ro', 'Người dùng', 'Quyết định'];
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const body = rows.map((r) => [r.time, r.signal, r.user, r.decision].map(escape).join(','));
+  const csv = [header.map(escape).join(','), ...body].join('\n');
+  // Prepend a UTF-8 BOM so Excel reads the Vietnamese characters correctly.
+  const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'intervention-log.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const GRID = '150px 1fr 130px 110px';
 
 export default function InterventionLogPage() {
+  const t = useT();
+  const toast = useToast();
+  const { data, isLoading, isError, refetch } = useInterventions();
+
+  const noSignalLabel = t('Không có tín hiệu');
+  const rows = useMemo<LogRow[]>(
+    () => (data ?? []).map((dto, idx) => toRow(dto, idx, noSignalLabel)),
+    [data, noSignalLabel],
+  );
+
+  const counts = useMemo(() => {
+    const c: Record<Decision, number> = { ALLOW: 0, WARN: 0, PAUSE: 0, BLOCK: 0 };
+    for (const r of rows) c[r.decision] += 1;
+    return c;
+  }, [rows]);
+
   return (
     <div style={{ animation: 'fadeUp .3s ease' }}>
       <header
@@ -56,14 +107,21 @@ export default function InterventionLogPage() {
           }}
         >
           <div>
-            <h1 style={pageTitle}>Nhật ký can thiệp · Intervention Log</h1>
+            <h1 style={pageTitle}>{t('Nhật ký can thiệp · Intervention Log')}</h1>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              SDK đánh giá rủi ro giao dịch · Phục vụ kiểm toán
+              {t('SDK đánh giá rủi ro giao dịch · Phục vụ kiểm toán')}
             </p>
           </div>
-          {/* TODO: wire to generated export endpoint from @/api/generated. */}
-          <Button type="button" variant="secondary">
-            Xuất CSV
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={rows.length === 0}
+            onClick={() => {
+              exportCsv(rows);
+              toast(t('Đã xuất {n} dòng', { n: rows.length }));
+            }}
+          >
+            {t('Xuất CSV')}
           </Button>
         </header>
 
@@ -76,7 +134,7 @@ export default function InterventionLogPage() {
             marginBottom: 14,
           }}
         >
-          {KPIS.map((k) => (
+          {KPI_META.map((k) => (
             <div
               key={k.label}
               style={{
@@ -95,7 +153,7 @@ export default function InterventionLogPage() {
                   color: k.color,
                 }}
               >
-                {k.value}
+                {counts[k.key]}
               </div>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>{k.label}</div>
             </div>
@@ -120,17 +178,31 @@ export default function InterventionLogPage() {
               background: 'var(--bg)',
             }}
           >
-            {['Thời gian', 'Tín hiệu rủi ro', 'Giao dịch', 'Quyết định', 'Score'].map((h) => (
+            {[t('Thời gian'), t('Tín hiệu rủi ro'), t('Người dùng'), t('Quyết định')].map((h) => (
               <div key={h} style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--muted)' }}>
                 {h}
               </div>
             ))}
           </div>
 
-          {MOCK_ROWS.map((r, idx) => {
+          {isLoading && <TableMessage>{t('Đang tải nhật ký…')}</TableMessage>}
+          {!isLoading && isError && (
+            <TableMessage>
+              {t('Không tải được dữ liệu.')}{' '}
+              <button type="button" onClick={() => refetch()} style={inlineRetry}>
+                {t('Thử lại')}
+              </button>
+            </TableMessage>
+          )}
+          {!isLoading && !isError && rows.length === 0 && (
+            <TableMessage>{t('Chưa có can thiệp nào được ghi nhận.')}</TableMessage>
+          )}
+
+          {!isLoading &&
+            !isError &&
+            rows.map((r, idx) => {
             const badge = DECISION_BADGE[r.decision];
-            const last = idx === MOCK_ROWS.length - 1;
-            const scoreColor = r.score >= 70 ? 'var(--red)' : r.score >= 40 ? 'var(--amber)' : 'var(--teal)';
+            const last = idx === rows.length - 1;
             return (
               <div
                 key={r.id}
@@ -146,7 +218,9 @@ export default function InterventionLogPage() {
                   {r.time}
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--text)' }}>{r.signal}</div>
-                <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>{r.transaction}</div>
+                <div style={{ fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: 'var(--muted)' }}>
+                  {r.user}
+                </div>
                 <div>
                   <span
                     style={{
@@ -161,16 +235,6 @@ export default function InterventionLogPage() {
                     {r.decision}
                   </span>
                 </div>
-                <div
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: scoreColor,
-                  }}
-                >
-                  {r.score}
-                </div>
               </div>
             );
           })}
@@ -178,6 +242,21 @@ export default function InterventionLogPage() {
     </div>
   );
 }
+
+function TableMessage({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 13, color: 'var(--muted)' }}>
+      {children}
+    </div>
+  );
+}
+
+const inlineRetry: React.CSSProperties = {
+  all: 'unset',
+  color: 'var(--blue)',
+  cursor: 'pointer',
+  fontWeight: 600,
+};
 
 const pageTitle: React.CSSProperties = {
   fontFamily: "'Space Grotesk', system-ui",

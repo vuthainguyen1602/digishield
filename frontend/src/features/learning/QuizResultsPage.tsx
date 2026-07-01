@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Check, X, ChevronDown } from 'lucide-react';
 import { Button } from '@/shared/ui';
+import { useT } from '@/shared/i18n/I18nProvider';
 import type { AssessmentResult } from './api';
 
 /**
@@ -30,6 +31,7 @@ interface ResultsState {
 const POINTS_PER_CORRECT = 20;
 
 export default function QuizResultsPage() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -52,10 +54,10 @@ export default function QuizResultsPage() {
         }}
       >
         <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 16 }}>
-          Chưa có kết quả để hiển thị. Vui lòng làm bài kiểm tra.
+          {t('Chưa có kết quả để hiển thị. Vui lòng làm bài kiểm tra.')}
         </p>
         <Button type="button" variant="primary" onClick={() => navigate(`/learn/quiz/${id ?? ''}`)}>
-          Làm bài kiểm tra
+          {t('Làm bài kiểm tra')}
         </Button>
       </div>
     );
@@ -73,7 +75,7 @@ export default function QuizResultsPage() {
 
   const tintBg = passed ? 'rgba(24,147,92,.12)' : 'rgba(221,59,64,.12)';
   const tintColor = passed ? 'var(--teal)' : 'var(--red)';
-  const resultLabel = passed ? 'Đạt yêu cầu' : 'Chưa đạt';
+  const resultLabel = passed ? t('Đạt yêu cầu') : t('Chưa đạt');
 
   return (
     <div style={{ animation: 'fadeUp .3s ease', maxWidth: 640, margin: '0 auto' }}>
@@ -108,7 +110,7 @@ export default function QuizResultsPage() {
             {score}
           </div>
           <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>
-            {score} / {total} câu đúng
+            {t('{score} / {total} câu đúng', { score, total })}
           </div>
           <div
             style={{
@@ -141,7 +143,7 @@ export default function QuizResultsPage() {
               >
                 +{pointsEarned}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>điểm nhận được</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{t('điểm nhận được')}</div>
             </div>
             <div style={{ width: 1, height: 40, background: 'var(--border)' }} />
             <div>
@@ -155,7 +157,7 @@ export default function QuizResultsPage() {
               >
                 {score}/{total}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>câu đúng</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{t('câu đúng')}</div>
             </div>
           </div>
         </section>
@@ -171,7 +173,7 @@ export default function QuizResultsPage() {
           }}
         >
           <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: '0 0 16px' }}>
-            Xem lại đáp án
+            {t('Xem lại đáp án')}
           </h2>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {review.map((r) => {
@@ -220,7 +222,7 @@ export default function QuizResultsPage() {
                         color: 'var(--text)',
                       }}
                     >
-                      Câu {r.num}
+                      {t('Câu {num}', { num: r.num })}
                       {expandable && (
                         <ChevronDown
                           size={13}
@@ -260,7 +262,7 @@ export default function QuizResultsPage() {
             fullWidth
             onClick={() => navigate('/certificates/cert-phishing')}
           >
-            Xem chứng chỉ
+            {t('Xem chứng chỉ')}
           </Button>
           <Button
             type="button"
@@ -268,7 +270,7 @@ export default function QuizResultsPage() {
             fullWidth
             onClick={() => navigate(`/learn/lessons/${id ?? 'next'}`)}
           >
-            Bài tiếp theo →
+            {t('Bài tiếp theo →')}
           </Button>
         </div>
     </div>

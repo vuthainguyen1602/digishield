@@ -1,7 +1,14 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, PenLine } from 'lucide-react';
 import { Drawer, useToast } from '@/shared/ui';
-import { usePhishingReports, type PhishingReport } from './api';
+import { useT } from '@/shared/i18n/I18nProvider';
+import {
+  usePhishingReports,
+  useTriageReport,
+  useConvertReportToTraining,
+  type PhishingReport,
+  type TriageDecision,
+} from './api';
 
 /**
  * SocInboxPage — SOC analyst triage queue (`/soc/inbox`).
@@ -63,9 +70,19 @@ function confColor(label: AiLabel): string {
   return 'var(--teal)';
 }
 
+/** Bulk-action button labels → the triage decision they map to. */
+const BULK_DECISIONS: Record<string, TriageDecision> = {
+  'Xác nhận đe dọa': 'confirm_threat',
+  'Đánh dấu sạch': 'dismiss',
+  'Cách ly': 'quarantine',
+};
+
 export default function SocInboxPage() {
+  const t = useT();
   const toast = useToast();
   const { data, isLoading, isError, refetch } = usePhishingReports();
+  const triage = useTriageReport();
+  const convertToTraining = useConvertReportToTraining();
 
   const reports = useMemo<Report[]>(() => (data ?? []).map(toReport), [data]);
 
@@ -95,19 +112,30 @@ export default function SocInboxPage() {
   }
 
   function bulkAction(label: string) {
-    // TODO: replace with generated triage mutations from @/api/generated.
-    toast(`${label}: ${selected.length} báo cáo`);
+    const decision = BULK_DECISIONS[label];
+    if (!decision || selected.length === 0) return;
+    selected.forEach((id) => triage.mutate({ id, decision }));
+    toast(`${t(label)}: ${t('{n} báo cáo', { n: selected.length })}`);
     setSelected([]);
   }
 
   function drawerAction(label: string) {
-    // TODO: replace with generated triage mutation from @/api/generated.
-    toast(label);
+    const report = activeReport;
     setOpenId(null);
+    if (!report) return;
+    const onSuccess = () => toast(t(label));
+    const onError = () => toast(t('Thao tác thất bại, thử lại'));
+    if (label.startsWith('ThreatFlip')) {
+      convertToTraining.mutate(report.id, { onSuccess, onError });
+    } else if (label.includes('blacklist')) {
+      triage.mutate({ id: report.id, decision: 'confirm_threat', addToBlacklist: true }, { onSuccess, onError });
+    } else {
+      triage.mutate({ id: report.id, decision: 'confirm_threat' }, { onSuccess, onError });
+    }
   }
 
   const tabs: { id: Tab; label: string; count: number; threatStyle?: boolean }[] = [
-    { id: 'all', label: 'Tất cả', count: counts.all },
+    { id: 'all', label: t('Tất cả'), count: counts.all },
     { id: 'threat', label: 'THREAT', count: counts.threat, threatStyle: true },
     { id: 'spam', label: 'SPAM', count: counts.spam },
     { id: 'clean', label: 'CLEAN', count: counts.clean },
@@ -125,9 +153,9 @@ export default function SocInboxPage() {
           }}
         >
           <div>
-            <h1 style={pageTitle}>Hộp xử lý báo cáo · SOC Inbox</h1>
+            <h1 style={pageTitle}>{t('Hộp xử lý báo cáo · SOC Inbox')}</h1>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              {counts.all} báo cáo mới · AI triage enabled
+              {t('{n} báo cáo mới · AI triage enabled', { n: counts.all })}
             </p>
           </div>
         </header>
@@ -136,7 +164,7 @@ export default function SocInboxPage() {
         {selected.length > 0 && (
           <div
             role="group"
-            aria-label="Thao tác hàng loạt"
+            aria-label={t('Thao tác hàng loạt')}
             style={{
               background: 'rgba(37,102,235,.1)',
               border: '1px solid rgba(37,102,235,.25)',
@@ -149,17 +177,17 @@ export default function SocInboxPage() {
             }}
           >
             <span style={{ fontSize: 13.5, fontWeight: 500, color: '#1A4FD0' }}>
-              Đã chọn {selected.length} báo cáo
+              {t('Đã chọn {n} báo cáo', { n: selected.length })}
             </span>
             <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
               <button type="button" onClick={() => bulkAction('Xác nhận đe dọa')} style={bulkBtn('threat')}>
-                Xác nhận đe dọa
+                {t('Xác nhận đe dọa')}
               </button>
               <button type="button" onClick={() => bulkAction('Đánh dấu sạch')} style={bulkBtn('clean')}>
-                Đánh dấu sạch
+                {t('Đánh dấu sạch')}
               </button>
               <button type="button" onClick={() => bulkAction('Cách ly')} style={bulkBtn('neutral')}>
-                Cách ly
+                {t('Cách ly')}
               </button>
             </div>
           </div>
@@ -177,7 +205,7 @@ export default function SocInboxPage() {
           {/* Filter tabs */}
           <div
             role="tablist"
-            aria-label="Lọc báo cáo"
+            aria-label={t('Lọc báo cáo')}
             style={{
               padding: '12px 20px',
               borderBottom: '1px solid var(--border)',
@@ -232,7 +260,7 @@ export default function SocInboxPage() {
             }}
           >
             <div />
-            {['Báo cáo', 'Nhãn AI', 'Tin cậy', 'Khi'].map((h) => (
+            {[t('Báo cáo'), t('Nhãn AI'), t('Tin cậy'), t('Khi')].map((h) => (
               <div key={h} style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--muted)' }}>
                 {h}
               </div>
@@ -240,17 +268,17 @@ export default function SocInboxPage() {
           </div>
 
           {/* States */}
-          {isLoading && <TableMessage>Đang tải báo cáo…</TableMessage>}
+          {isLoading && <TableMessage>{t('Đang tải báo cáo…')}</TableMessage>}
           {!isLoading && isError && (
             <TableMessage>
-              <span style={{ color: 'var(--red)', fontWeight: 600 }}>Không tải được báo cáo. </span>
+              <span style={{ color: 'var(--red)', fontWeight: 600 }}>{t('Không tải được báo cáo. ')}</span>
               <button type="button" onClick={() => refetch()} style={inlineRetry}>
-                Thử lại
+                {t('Thử lại')}
               </button>
             </TableMessage>
           )}
           {!isLoading && !isError && visible.length === 0 && (
-            <TableMessage>Không có báo cáo nào.</TableMessage>
+            <TableMessage>{t('Không có báo cáo nào.')}</TableMessage>
           )}
 
           {/* Rows */}
@@ -284,7 +312,7 @@ export default function SocInboxPage() {
                 <div
                   role="checkbox"
                   aria-checked={isSelected}
-                  aria-label={`Chọn báo cáo từ ${r.sender}`}
+                  aria-label={t('Chọn báo cáo từ {sender}', { sender: r.sender })}
                   tabIndex={0}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -399,6 +427,7 @@ function ReportDrawerBody({
   onAction: (label: string) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const meta = LABEL_META[report.aiLabel];
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -412,7 +441,7 @@ function ReportDrawerBody({
           marginBottom: 12,
         }}
       >
-        Chi tiết báo cáo · Report Detail
+        {t('Chi tiết báo cáo · Report Detail')}
       </div>
 
       {/* AI judgment */}
@@ -448,10 +477,10 @@ function ReportDrawerBody({
           >
             {Math.round(report.aiConfidence * 100)}%
           </span>
-          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>tin cậy</span>
+          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{t('tin cậy')}</span>
         </div>
         <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
-          Lý do AI: {report.reasoning || 'Không có giải thích từ AI.'}
+          {t('Lý do AI:')} {report.reasoning || t('Không có giải thích từ AI.')}
         </div>
         {/* Blacklist match indicator (amber) */}
         {report.blacklistMatch && (
@@ -466,7 +495,7 @@ function ReportDrawerBody({
           >
             <AlertTriangle size={13} color="var(--amber)" aria-hidden="true" />
             <span style={{ color: 'var(--amber)', fontWeight: 500 }}>
-              Đối chiếu blacklist: TRÙNG nguồn đe dọa đã biết
+              {t('Đối chiếu blacklist: TRÙNG nguồn đe dọa đã biết')}
             </span>
           </div>
         )}
@@ -484,7 +513,7 @@ function ReportDrawerBody({
             marginBottom: 12,
           }}
         >
-          Nội dung email (đã làm sạch)
+          {t('Nội dung email (đã làm sạch)')}
         </div>
         <div
           style={{
@@ -514,16 +543,15 @@ function ReportDrawerBody({
               Subject: <span style={{ color: '#ECF1F8', fontWeight: 500 }}>{report.subject}</span>
             </div>
             <div style={{ color: '#69788F' }}>
-              Ngày: <span style={{ color: '#9AACBD' }}>27/06/2026 08:43</span>
+              {t('Ngày:')} <span style={{ color: '#9AACBD' }}>27/06/2026 08:43</span>
             </div>
           </div>
-          <p style={{ margin: '0 0 8px' }}>Kính gửi Quý khách,</p>
+          <p style={{ margin: '0 0 8px' }}>{t('Kính gửi Quý khách,')}</p>
           <p style={{ margin: '0 0 8px' }}>
-            Tài khoản của bạn có dấu hiệu bất thường. Để bảo vệ tài sản, vui lòng xác minh thông tin
-            ngay.
+            {t('Tài khoản của bạn có dấu hiệu bất thường. Để bảo vệ tài sản, vui lòng xác minh thông tin ngay.')}
           </p>
           <p style={{ margin: 0, color: '#F87171', fontWeight: 500 }}>
-            [LINK ĐÃ VÔ HIỆU HÓA] — hệ thống đã ngắt kết nối
+            {t('[LINK ĐÃ VÔ HIỆU HÓA] — hệ thống đã ngắt kết nối')}
           </p>
         </div>
       </section>
@@ -539,7 +567,7 @@ function ReportDrawerBody({
             textTransform: 'uppercase',
           }}
         >
-          Hành động
+          {t('Hành động')}
         </div>
         <button
           type="button"
@@ -559,7 +587,7 @@ function ReportDrawerBody({
           }}
         >
           <AlertTriangle size={15} aria-hidden="true" />
-          Xác nhận đe dọa &amp; Phát cảnh báo
+          {t('Xác nhận đe dọa & Phát cảnh báo')}
         </button>
         <button
           type="button"
@@ -579,7 +607,7 @@ function ReportDrawerBody({
           }}
         >
           <PenLine size={15} aria-hidden="true" />
-          ThreatFlip — Lật thành bài học
+          {t('ThreatFlip — Lật thành bài học')}
         </button>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <button
@@ -595,7 +623,7 @@ function ReportDrawerBody({
               cursor: 'pointer',
             }}
           >
-            Thêm blacklist
+            {t('Thêm blacklist')}
           </button>
           <button
             type="button"
@@ -610,7 +638,7 @@ function ReportDrawerBody({
               cursor: 'pointer',
             }}
           >
-            Đóng — sạch
+            {t('Đóng — sạch')}
           </button>
         </div>
       </div>

@@ -67,7 +67,8 @@ public class ReportingServiceImpl implements ReportingService {
             report.setAiLabel(AiLabel.THREAT);
             report.setStatus(ReportStatus.CONFIRMED);
             PhishingReport saved = reportRepository.save(report);
-            eventPublisher.publish(new PhishingReportConfirmedEvent(tenantId, saved.getId()));
+            eventPublisher.publish(
+                    new PhishingReportConfirmedEvent(tenantId, saved.getUserId(), saved.getId()));
             return saved;
         }
 

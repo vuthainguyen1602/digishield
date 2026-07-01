@@ -4,7 +4,9 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { BrowserRouter } from 'react-router-dom';
 import { queryClient } from '@/shared/api/queryClient';
 import { ToastProvider } from '@/shared/ui';
+import { I18nProvider } from '@/shared/i18n/I18nProvider';
 import { AuthProvider } from './auth/AuthContext';
+import { LocaleSync } from './LocaleSync';
 
 interface AppProvidersProps {
   children: ReactNode;
@@ -20,11 +22,14 @@ interface AppProvidersProps {
 export function AppProviders({ children }: AppProvidersProps) {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <ToastProvider>{children}</ToastProvider>
-        </AuthProvider>
-      </BrowserRouter>
+      <I18nProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <LocaleSync />
+            <ToastProvider>{children}</ToastProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </I18nProvider>
       {import.meta.env.DEV ? <ReactQueryDevtools initialIsOpen={false} /> : null}
     </QueryClientProvider>
   );
